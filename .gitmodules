@@ -1,0 +1,6 @@
+[submodule "extern/claude-skills"]
+	path = extern/claude-skills
+	url = https://github.com/Jeffallan/claude-skills.git
+[submodule "extern/everything-claude-code"]
+	path = extern/everything-claude-code
+	url = https://github.com/affaan-m/everything-claude-code.git
