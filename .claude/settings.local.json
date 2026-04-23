@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Bash(cargo build:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(rustup --version)",
+      "Bash(rustc --version)",
+      "Bash(cargo --version)",
+      "Bash(rustup update:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo run:*)"
     ]
   }
 }
