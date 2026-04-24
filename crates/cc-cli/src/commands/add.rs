@@ -4,26 +4,26 @@ use anyhow::{bail, Result};
 use cc_schema::{Origin, ResourceType};
 use std::path::Path;
 
-pub fn run(target: &AddTarget, project_dir: &Path) -> Result<()> {
+pub fn run(target: &AddTarget, project_dir: &Path, workspace_root: &Path) -> Result<()> {
     match target {
         AddTarget::Skill {
             name,
             from,
             to,
             force,
-        } => add_resource(ResourceType::Skill, name, from, to, *force, project_dir),
+        } => add_resource(ResourceType::Skill, name, from, to, *force, project_dir, workspace_root),
         AddTarget::Command {
             name,
             from,
             to,
             force,
-        } => add_resource(ResourceType::Command, name, from, to, *force, project_dir),
+        } => add_resource(ResourceType::Command, name, from, to, *force, project_dir, workspace_root),
         AddTarget::Agent {
             name,
             from,
             to,
             force,
-        } => add_resource(ResourceType::Agent, name, from, to, *force, project_dir),
+        } => add_resource(ResourceType::Agent, name, from, to, *force, project_dir, workspace_root),
         AddTarget::Hook {
             event,
             cmd,
@@ -40,6 +40,7 @@ fn add_resource(
     to: &str,
     force: bool,
     project_dir: &Path,
+    workspace_root: &Path,
 ) -> Result<()> {
     let target_origin = match to {
         "user" => Origin::User,
@@ -58,7 +59,8 @@ fn add_resource(
         extern_libs
     };
 
-    let mut entries = cc_core::discover_resources(resource_type, project_dir, &sources);
+    let mut entries =
+        cc_core::discover_resources(resource_type, workspace_root, &sources);
     cc_core::resolve_resources(&mut entries);
 
     // Find the requested resource
@@ -66,29 +68,57 @@ fn add_resource(
         .iter()
         .find(|e| e.name == name)
         .ok_or_else(|| anyhow::anyhow!(
-            "{} '{}' not found in any origin.\n\nSearched:\n  .claude/{}/\n  extern/\n\nRun 'cc list {}s' to see available resources.",
-            resource_type, name, resource_type.dir_name(), resource_type
+            "{} '{}' not found in any registry.\n\nRun 'cc list {}s' to see available resources.",
+            resource_type, name, resource_type
         ))?;
 
-    match cc_core::install_resource(source, &target_origin, project_dir, force) {
-        Ok(result) => {
-            output::print_success(&format!(
-                "Installed {} \"{}\" → {}",
-                resource_type,
-                result.name,
-                result.destination.display()
-            ));
-        }
-        Err(cc_core::CoreError::Conflict { .. }) => {
-            bail!(
-                "{} '{}' already exists. Use --force to overwrite.",
-                resource_type,
-                name
-            );
-        }
-        Err(e) => bail!("Install failed: {e}"),
+    // Determine the source directory to copy (the folder, not just the .md file)
+    let source_dir = source.path.parent().unwrap_or_else(|| Path::new("."));
+    let dest_dir = cc_core::paths::origin_resource_dir(&target_origin, resource_type, project_dir)
+        .join(&source.name);
+
+    if dest_dir.exists() && !force {
+        bail!(
+            "{} '{}' already exists at {}. Use --force to overwrite.",
+            resource_type,
+            name,
+            dest_dir.display()
+        );
     }
 
+    // Remove existing if force
+    if dest_dir.exists() && force {
+        std::fs::remove_dir_all(&dest_dir)?;
+    }
+
+    // Copy the entire folder
+    std::fs::create_dir_all(&dest_dir)?;
+    copy_dir_recursive(source_dir, &dest_dir)?;
+
+    output::print_success(&format!(
+        "Installed {} \"{}\" → {}",
+        resource_type,
+        source.name,
+        dest_dir.display()
+    ));
+
+    Ok(())
+}
+
+/// Recursively copy a directory's contents into the destination.
+fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<()> {
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let src_path = entry.path();
+        let dest_path = dest.join(entry.file_name());
+
+        if src_path.is_dir() {
+            std::fs::create_dir_all(&dest_path)?;
+            copy_dir_recursive(&src_path, &dest_path)?;
+        } else {
+            std::fs::copy(&src_path, &dest_path)?;
+        }
+    }
     Ok(())
 }
 

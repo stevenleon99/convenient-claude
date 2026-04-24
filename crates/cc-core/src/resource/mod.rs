@@ -24,4 +24,6 @@ pub struct ResourceEntry {
     pub active: bool,
     /// A short description (if available).
     pub description: Option<String>,
+    /// Which registry in cc-workspace.toml this came from (e.g. "extern/claude-skills", "local", "project").
+    pub registry: Option<String>,
 }

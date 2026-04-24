@@ -131,6 +131,11 @@ pub enum ListTarget {
         #[arg(long, default_value = "table")]
         format: OutputFormat,
     },
+    /// List local plugins.
+    Plugins {
+        #[arg(long, default_value = "table")]
+        format: OutputFormat,
+    },
     /// List everything, grouped by type.
     All {
         #[arg(long, default_value = "table")]

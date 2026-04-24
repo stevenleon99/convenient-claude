@@ -35,7 +35,7 @@ fn print_resource_table(entries: &[ResourceEntry]) {
         .apply_modifier(UTF8_ROUND_CORNERS)
         .set_content_arrangement(ContentArrangement::Dynamic);
 
-    table.set_header(vec!["Name", "Type", "Origin", "Active", "Description"]);
+    table.set_header(vec!["Name", "Type", "Registry", "Active", "Description"]);
 
     for entry in entries {
         let active_str = if entry.active { "●" } else { "○" };
@@ -45,10 +45,12 @@ fn print_resource_table(entries: &[ResourceEntry]) {
             Cell::new(active_str).fg(TableColor::DarkGrey)
         };
 
+        let registry = entry.registry.as_deref().unwrap_or("-");
+
         table.add_row(vec![
             Cell::new(&entry.name),
             Cell::new(entry.resource_type.to_string()),
-            Cell::new(entry.origin.to_string()),
+            Cell::new(registry),
             active_cell,
             Cell::new(entry.description.as_deref().unwrap_or("-")),
         ]);
@@ -64,6 +66,7 @@ fn print_resource_json(entries: &[ResourceEntry]) {
             serde_json::json!({
                 "name": e.name,
                 "type": e.resource_type.to_string(),
+                "registry": e.registry,
                 "origin": e.origin.to_string(),
                 "active": e.active,
                 "description": e.description,
@@ -79,12 +82,14 @@ fn print_resource_json(entries: &[ResourceEntry]) {
 fn print_resource_plain(entries: &[ResourceEntry]) {
     for entry in entries {
         let active_marker = if entry.active { "*" } else { " " };
+        let registry = entry.registry.as_deref().unwrap_or("-");
         println!(
-            "{}{active_marker} {} ({}/{})",
+            "{}{active_marker} {} [{}/{}] ({})",
             if entry.active { "" } else { "  " },
             entry.name,
             entry.resource_type,
-            entry.origin,
+            registry,
+            entry.description.as_deref().unwrap_or(""),
         );
     }
 }

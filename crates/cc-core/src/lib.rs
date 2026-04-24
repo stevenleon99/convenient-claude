@@ -12,6 +12,7 @@ pub mod skill;
 pub mod stats;
 pub mod sync;
 pub mod validate;
+pub mod workspace;
 
 // Re-export primary types.
 pub use error::CoreError;
@@ -19,3 +20,4 @@ pub use init::init_project;
 pub use resource::{discover_resources, install_resource, resolve_resources, ResourceEntry};
 pub use session::{SessionContext, SessionTracker};
 pub use validate::{validate_project, ValidationFinding, ValidationLevel};
+pub use workspace::WorkspaceConfig;

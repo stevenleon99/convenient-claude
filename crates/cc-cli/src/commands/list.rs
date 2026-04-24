@@ -4,25 +4,27 @@ use anyhow::Result;
 use cc_schema::ResourceType;
 use std::path::Path;
 
-pub fn run(target: &ListTarget, project_dir: &Path) -> Result<()> {
+pub fn run(target: &ListTarget, project_dir: &Path, workspace_root: &Path) -> Result<()> {
     match target {
         ListTarget::Skills { filter, format } => {
-            list_resource(ResourceType::Skill, filter.as_deref(), format, project_dir)
+            list_resource(ResourceType::Skill, filter.as_deref(), format, project_dir, workspace_root)
         }
         ListTarget::Commands { filter, format } => list_resource(
             ResourceType::Command,
             filter.as_deref(),
             format,
             project_dir,
+            workspace_root,
         ),
         ListTarget::Agents { filter, format } => {
-            list_resource(ResourceType::Agent, filter.as_deref(), format, project_dir)
+            list_resource(ResourceType::Agent, filter.as_deref(), format, project_dir, workspace_root)
         }
         ListTarget::Hooks { format } => list_hooks(format, project_dir),
         ListTarget::Rules { filter, format } => {
-            list_resource(ResourceType::Rule, filter.as_deref(), format, project_dir)
+            list_resource(ResourceType::Rule, filter.as_deref(), format, project_dir, workspace_root)
         }
-        ListTarget::All { format } => list_all(format, project_dir),
+        ListTarget::Plugins { format } => list_plugins(format, project_dir, workspace_root),
+        ListTarget::All { format } => list_all(format, project_dir, workspace_root),
     }
 }
 
@@ -31,9 +33,10 @@ fn list_resource(
     filter: Option<&str>,
     format: &OutputFormat,
     project_dir: &Path,
+    workspace_root: &Path,
 ) -> Result<()> {
     let extern_libs = cc_core::sync::list_extern_libs(project_dir);
-    let mut entries = cc_core::discover_resources(resource_type, project_dir, &extern_libs);
+    let mut entries = cc_core::discover_resources(resource_type, workspace_root, &extern_libs);
 
     // Apply filter
     if let Some(f) = filter {
@@ -87,7 +90,7 @@ fn list_hooks(format: &OutputFormat, project_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn list_all(format: &OutputFormat, project_dir: &Path) -> Result<()> {
+fn list_all(format: &OutputFormat, project_dir: &Path, workspace_root: &Path) -> Result<()> {
     let fmt = match format {
         OutputFormat::Table => Format::Table,
         OutputFormat::Json => Format::Json,
@@ -99,7 +102,7 @@ fn list_all(format: &OutputFormat, project_dir: &Path) -> Result<()> {
             continue;
         }
         let extern_libs = cc_core::sync::list_extern_libs(project_dir);
-        let mut entries = cc_core::discover_resources(*rt, project_dir, &extern_libs);
+        let mut entries = cc_core::discover_resources(*rt, workspace_root, &extern_libs);
         cc_core::resolve_resources(&mut entries);
         if !entries.is_empty() {
             println!("\n{}:", rt);
@@ -116,4 +119,154 @@ fn event_variant_name(event: &cc_schema::HookEvent) -> &'static str {
         cc_schema::HookEvent::Notification => "Notification",
         cc_schema::HookEvent::Stop => "Stop",
     }
+}
+
+fn list_plugins(format: &OutputFormat, project_dir: &Path, workspace_root: &Path) -> Result<()> {
+    use cc_core::ResourceEntry;
+
+    let mut plugins: Vec<(String, std::path::PathBuf, cc_schema::Origin, Option<String>, String)> = Vec::new();
+
+    // Collect candidate directories to scan for plugins
+    let mut scan_dirs: Vec<(std::path::PathBuf, String)> = Vec::new();
+
+    // 1. Project-local: .claude/plugins/marketplaces
+    let project_plugins = project_dir.join(".claude").join("plugins").join("marketplaces");
+    scan_dirs.push((project_plugins, "project".to_string()));
+
+    // 2. User-local: ~/.claude/plugins/marketplaces
+    let user_plugins = cc_core::paths::user_claude_dir().join("plugins").join("marketplaces");
+    scan_dirs.push((user_plugins, "local".to_string()));
+
+    // 3. External registries from workspace config
+    if let Some(config) = cc_core::WorkspaceConfig::load(workspace_root) {
+        let registries = config.registries(workspace_root);
+        for registry in &registries {
+            // Direct plugins/marketplaces folder
+            let dir = registry.path.join("plugins").join("marketplaces");
+            if dir.is_dir() {
+                scan_dirs.push((dir, registry.label.clone()));
+            }
+            // .claude/plugins/marketplaces inside external projects
+            let claude_plugins = registry.path.join(".claude").join("plugins").join("marketplaces");
+            if claude_plugins.is_dir() {
+                scan_dirs.push((claude_plugins, registry.label.clone()));
+            }
+        }
+    }
+
+    // Scan each directory for plugin subdirectories
+    let mut seen = std::collections::HashSet::new();
+    for (dir, registry) in &scan_dirs {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_dir() {
+                    continue;
+                }
+                let name = match entry.file_name().to_str() {
+                    Some(n) if !n.starts_with('.') => n.to_string(),
+                    _ => continue,
+                };
+                // Deduplicate by name
+                if !seen.insert(name.clone()) {
+                    continue;
+                }
+
+                // Try to read a description from a README.md or PLUGIN.md inside
+                let description = read_plugin_description(&path);
+
+                let origin = match registry.as_str() {
+                    "project" => cc_schema::Origin::Project,
+                    "local" => cc_schema::Origin::User,
+                    _ => cc_schema::Origin::External {
+                        library: registry.clone(),
+                    },
+                };
+
+                plugins.push((
+                    name,
+                    path,
+                    origin,
+                    description,
+                    registry.clone(),
+                ));
+            }
+        }
+    }
+
+    if plugins.is_empty() {
+        println!("No plugins found.");
+        return Ok(());
+    }
+
+    match format {
+        OutputFormat::Json => {
+            let json_entries: Vec<serde_json::Value> = plugins
+                .iter()
+                .map(|(name, path, origin, desc, registry)| {
+                    serde_json::json!({
+                        "name": name,
+                        "type": "plugin",
+                        "registry": registry,
+                        "origin": origin.to_string(),
+                        "path": path.to_string_lossy(),
+                        "description": desc,
+                    })
+                })
+                .collect();
+            println!("{}", serde_json::to_string_pretty(&json_entries)?);
+        }
+        OutputFormat::Plain => {
+            for (name, _, origin, desc, registry) in &plugins {
+                let d = desc.as_deref().unwrap_or("");
+                if d.is_empty() {
+                    println!("{} [plugin/{}] ({})", name, registry, origin);
+                } else {
+                    println!("{} [plugin/{}] ({})", name, registry, d);
+                }
+            }
+        }
+        OutputFormat::Table => {
+            use comfy_table::{modifiers::UTF8_ROUND_CORNERS, presets::UTF8_FULL, Cell, ContentArrangement, Table};
+            let mut table = Table::new();
+            table
+                .load_preset(UTF8_FULL)
+                .apply_modifier(UTF8_ROUND_CORNERS)
+                .set_content_arrangement(ContentArrangement::Dynamic);
+            table.set_header(vec!["Name", "Registry", "Origin", "Description"]);
+            for (name, _, origin, desc, registry) in &plugins {
+                table.add_row(vec![
+                    Cell::new(name),
+                    Cell::new(registry),
+                    Cell::new(origin.to_string()),
+                    Cell::new(desc.as_deref().unwrap_or("-")),
+                ]);
+            }
+            println!("{table}");
+        }
+    }
+    Ok(())
+}
+
+/// Try to read a short description from a plugin directory.
+fn read_plugin_description(dir: &Path) -> Option<String> {
+    for candidate in &["PLUGIN.md", "README.md", "plugin.md", "readme.md"] {
+        let path = dir.join(candidate);
+        if path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                // Take the first non-empty, non-heading line
+                for line in content.lines() {
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() || trimmed.starts_with('#') {
+                        continue;
+                    }
+                    if trimmed.len() > 120 {
+                        return Some(format!("{}...", &trimmed[..120]));
+                    }
+                    return Some(trimmed.to_string());
+                }
+            }
+        }
+    }
+    None
 }

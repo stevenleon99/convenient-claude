@@ -46,6 +46,7 @@ mod tests {
             path: PathBuf::from(".claude/skills/commit.md"),
             active: false,
             description: Some("commit skill".into()),
+            registry: None,
         }];
         resolve_resources(&mut entries);
         assert!(entries[0].active);
@@ -63,6 +64,7 @@ mod tests {
                 path: PathBuf::from("extern/claude-skills/skills/react.md"),
                 active: false,
                 description: None,
+                registry: Some("extern/claude-skills".into()),
             },
             ResourceEntry {
                 name: "react".into(),
@@ -71,6 +73,7 @@ mod tests {
                 path: PathBuf::from(".claude/skills/react.md"),
                 active: false,
                 description: None,
+                registry: Some("project".into()),
             },
         ];
         resolve_resources(&mut entries);

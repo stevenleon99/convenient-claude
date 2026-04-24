@@ -1,10 +1,11 @@
 use crate::error::CoreError;
 use crate::paths::claude_dir;
+use crate::workspace::WorkspaceConfig;
 use cc_schema::Settings;
 use std::path::Path;
 
-/// Initialize a `.claude/` directory in the project.
-pub fn init_project(project_dir: &Path) -> Result<Vec<String>, CoreError> {
+/// Initialize a `.claude/` directory in the project and register it in cc-workspace.toml.
+pub fn init_project(project_dir: &Path, workspace_root: &Path) -> Result<Vec<String>, CoreError> {
     let claude = claude_dir(project_dir);
 
     if claude.exists() {
@@ -35,6 +36,9 @@ pub fn init_project(project_dir: &Path) -> Result<Vec<String>, CoreError> {
         std::fs::create_dir_all(&path)?;
         created.push(format!(".claude/{dir}/"));
     }
+
+    // Update cc-workspace.toml with the project path
+    WorkspaceConfig::set_current_project(workspace_root, project_dir)?;
 
     Ok(created)
 }

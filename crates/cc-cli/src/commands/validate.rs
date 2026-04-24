@@ -2,7 +2,7 @@ use crate::output;
 use anyhow::Result;
 use std::path::Path;
 
-pub fn run(project_dir: &Path, fix: bool) -> Result<()> {
+pub fn run(project_dir: &Path, fix: bool, _workspace_root: &Path) -> Result<()> {
     println!("Validating .claude/ resources...\n");
 
     let findings = cc_core::validate_project(project_dir);
