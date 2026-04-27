@@ -16,7 +16,7 @@ pub mod workspace;
 
 // Re-export primary types.
 pub use error::CoreError;
-pub use init::init_project;
+pub use init::{init_project, reinit_project, force_init_project, InitResult, ExistingClaudeDir};
 pub use resource::{discover_resources, install_resource, resolve_resources, ResourceEntry};
 pub use session::{SessionContext, SessionTracker};
 pub use validate::{validate_project, ValidationFinding, ValidationLevel};

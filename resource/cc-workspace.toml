@@ -1,19 +1,27 @@
 # cc-workspace.toml — Workspace registry for convenient-claude
 # Lists all project folders where cc looks for resources.
 
-[external]
+["local-claude-plugin"]
+# User-wide resource directory (~/.claude/)
+# Skills, commands, agents, rules here apply to all projects.
+claude_plugins = [
+    "C:/Users/Steve/.claude/plugins/marketplaces/claude-plugins-official/external_plugins",
+    "C:/Users/Steve/.claude/plugins/marketplaces/claude-plugins-official/plugins"
+]
+
+["local-other-plugin"]
+# folder under .claude\plugins\marketplaces except "claude-plugins-official"
+# like .claude\plugins\marketplaces\fullstack-dev-skills
+other_plugins = "C:/Users/Steve/.claude/plugins/marketplaces"
+
+["external"]
 # External libraries cloned into extern/ (read-only sources for discovery/install)
 projects = [
     "extern/claude-skills",
     "extern/everything-claude-code",
 ]
 
-[local]
-# User-wide resource directory (~/.claude/)
-# Skills, commands, agents, rules here apply to all projects.
-path = "~/.claude"
-
 ["current project"]
 # Current project's .claude/ directory.
 # This is set by `cc init` and all commands work on this project.
-path = "D:/claude_project/TEMP"
+path = "D:/claude_project/convenient-claude"

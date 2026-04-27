@@ -105,6 +105,7 @@ cc
 │   │   └── --last <N>            #   Last N sessions (default: 10)
 │   └── stats resources           # Per-resource usage breakdown
 ├── doctor                        # Diagnose setup issues
+├── tui                           # Launch interactive TUI dashboard
 └── completions                   # Generate shell completions
     └── <SHELL>                   # bash | zsh | fish | powershell
 ```
@@ -194,12 +195,14 @@ The CLI targets PowerShell, bash, zsh, and fish. All output must render correctl
 | `inquire` | Same + Password, Editor | Yes | Yes | More features, slightly heavier. |
 | **Verdict** | **`inquire`** — fuzzy search is useful when browsing 60+ skills from extern/. | | |
 
-**Full TUI framework (NOT recommended for this project):**
+**Full TUI framework:**
 
-| Library | Use case | Why NOT to use here |
-|---------|----------|-------------------|
-| `ratatui` | Full-screen terminal apps (dashboards, editors) | Overkill — `cc` is a command-line tool, not an interactive TUI. Adds complexity for no benefit. |
-| `cursive` | Same | Same reason, plus it brings its own backend (ncurses/pancurses). |
+| Library | Use case | Notes |
+|---------|----------|-------|
+| `ratatui` | Full-screen terminal apps (dashboards, explorers) | Used for `cc tui` interactive mode. Crossterm backend for cross-platform support. |
+| `cursive` | Same | Alternative, brings its own backend. Not used. |
+
+`ratatui` powers the `cc tui` command — a persistent, interactive terminal dashboard for browsing resources, selecting items, and viewing snapshots. The TUI runs a main loop with event polling and only exits when the user presses `q` or `Esc`.
 
 #### Key dependencies (revised)
 
@@ -216,6 +219,9 @@ termimad = "0.31"         # Markdown rendering in terminal
 indicatif = "0.17"        # Progress bars and spinners
 inquire = "0.7"           # Interactive prompts with fuzzy search
 serde_json = "1"          # JSON output format
+# Interactive TUI
+ratatui = "0.29"          # Full-screen TUI framework
+crossterm = "0.28"        # Terminal backend (raw mode, events, alternate screen)
 ```
 
 #### Module structure
@@ -237,8 +243,14 @@ crates/cc-cli/src/
 │   ├── stats.rs         # cc stats session/history/resources
 │   ├── config_cmd.rs    # cc config show/get/set/diff
 │   ├── doctor.rs        # cc doctor
+│   ├── tui.rs           # cc tui — interactive TUI entry point
 │   ├── stats.rs         # cc stats session/history/resources
 │   └── completions.rs   # cc completions <shell>
+├── tui/
+│   ├── mod.rs           # TUI module root
+│   ├── app.rs           # App state, navigation, snapshot logic
+│   ├── ui.rs            # ratatui rendering (header, table, detail, status)
+│   └── event.rs         # Keyboard event handling
 └── output.rs            # Formatting helpers (table, json, plain)
 ```
 
@@ -1192,6 +1204,46 @@ $ cc stats resources
   Most expensive resource: commit ($1.86)
   Most used resource: /validate (31 invocations)
 ```
+
+---
+
+### UC-12: Interactive TUI dashboard
+
+```
+$ cc tui
+
+ ──────────────────────────────────────────────────────────────
+  cc ─  Skills │ Commands │ Agents │ Rules
+ ──────────────────────────────────────────────────────────────
+  Skills (12)
+
+  >> commit            extern/claude-skills  ●  Generate conventional commits...
+     review            extern/claude-skills  ●  Code review with structured...
+     react-expert      extern/claude-skills  ●  React/Next.js specialist...
+     python-pro        extern/claude-skills  ○  Python expert with...
+     ...
+ ──────────────────────────────────────────────────────────────
+  Resource Detail
+  Name: commit
+  Type: Skill
+  Origin: Project
+  Registry: extern/claude-skills
+  Active: active
+  Description: Generate conventional commits from staged changes
+  Path: .claude/skills/commit.md
+ ──────────────────────────────────────────────────────────────
+  ↑↓ Navigate  Tab Switch  Enter Detail  r Refresh  q Quit     Loaded 12 Skill(s)
+ ──────────────────────────────────────────────────────────────
+```
+
+Keybindings:
+- `↑`/`k` — Move selection up
+- `↓`/`j` — Move selection down
+- `Tab` — Switch to next resource type tab (Skills → Commands → Agents → Rules)
+- `Shift+Tab` — Switch to previous tab
+- `Enter` — Toggle detail panel for selected resource
+- `r` — Refresh resource list from disk
+- `q` or `Esc` — Quit the TUI
 
 ---
 

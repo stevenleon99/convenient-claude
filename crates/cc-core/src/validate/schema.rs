@@ -125,6 +125,9 @@ fn validate_resource_file(path: &Path, resource_type: ResourceType) -> Result<()
         ResourceType::Hook => {
             // Hooks validated in settings validation
         }
+        ResourceType::Plugin => {
+            // Plugins are read-only, no validation needed
+        }
     }
 
     Ok(())

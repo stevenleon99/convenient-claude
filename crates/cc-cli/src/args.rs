@@ -96,6 +96,9 @@ pub enum Commands {
         /// Target shell.
         shell: String,
     },
+
+    /// Launch interactive TUI dashboard.
+    Tui,
 }
 
 #[derive(Subcommand)]

@@ -1,6 +1,7 @@
 mod args;
 mod commands;
 mod output;
+mod tui;
 
 use anyhow::Result;
 use clap::Parser;
@@ -60,6 +61,8 @@ fn main() -> Result<()> {
             eprintln!("Shell completions for '{shell}' are not yet implemented.");
             eprintln!("Use 'cc --help' for available commands.");
         }
+
+        args::Commands::Tui => commands::tui::run(&project_dir, &workspace_root)?,
     }
 
     Ok(())

@@ -18,6 +18,17 @@ pub enum HookEvent {
     Stop,
 }
 
+impl std::fmt::Display for HookEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HookEvent::PreToolUse => write!(f, "PreToolUse"),
+            HookEvent::PostToolUse => write!(f, "PostToolUse"),
+            HookEvent::Notification => write!(f, "Notification"),
+            HookEvent::Stop => write!(f, "Stop"),
+        }
+    }
+}
+
 /// A hook matcher: matches a tool name and runs associated hooks.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HookMatcher {

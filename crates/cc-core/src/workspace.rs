@@ -4,24 +4,45 @@ use std::path::{Path, PathBuf};
 /// Parsed cc-workspace.toml configuration.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct WorkspaceConfig {
+    #[serde(default, rename = "local-claude-plugin")]
+    pub local_claude_plugin: LocalPluginConfig,
+    #[serde(default, rename = "local-other-plugin")]
+    pub local_other_plugin: OtherPluginConfig,
+    #[serde(default)]
     pub external: ExternalConfig,
+    #[serde(default)]
     pub local: LocalConfig,
-    #[serde(rename = "current project")]
+    #[serde(default, rename = "current project")]
     pub project: ProjectConfig,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct LocalPluginConfig {
+    #[serde(default)]
+    pub claude_plugins: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct OtherPluginConfig {
+    #[serde(default)]
+    pub other_plugins: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ExternalConfig {
+    #[serde(default)]
     pub projects: Vec<String>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct LocalConfig {
+    #[serde(default)]
     pub path: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ProjectConfig {
+    #[serde(default)]
     pub path: String,
 }
 
@@ -76,6 +97,8 @@ impl WorkspaceConfig {
         let path_value = project_dir.to_string_lossy();
         // Strip Windows \\?\ prefix for clean paths
         let path_value = path_value.strip_prefix(r"\\?\").unwrap_or(&path_value);
+        // Use forward slashes so TOML doesn't interpret backslashes as escape sequences
+        let path_value = path_value.replace('\\', "/");
 
         // Replace the path = "..." line under [current project] or ["current project"]
         let mut new_lines = Vec::new();
@@ -144,6 +167,39 @@ impl WorkspaceConfig {
         registries
     }
 
+    /// Resolve subdirectories under `other_plugins` as resource registries.
+    /// Each subdirectory (e.g., fullstack-dev-skills, obsidian-skills) becomes
+    /// a registry whose path contains skills/, commands/, agents/, rules/ etc.
+    pub fn other_plugin_registries(&self) -> Vec<Registry> {
+        let Some(other) = &self.local_other_plugin.other_plugins else {
+            return Vec::new();
+        };
+
+        let expanded = expand_tilde(other);
+        if !expanded.is_dir() {
+            return Vec::new();
+        }
+
+        let mut registries = Vec::new();
+        if let Ok(entries) = std::fs::read_dir(&expanded) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    if let Some(name) = entry.file_name().to_str() {
+                        if !name.starts_with('.') {
+                            registries.push(Registry {
+                                label: name.to_string(),
+                                path,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        registries
+    }
+
     /// Get the current project path from the config.
     pub fn current_project_path(&self, workspace_root: &Path) -> Option<PathBuf> {
         if self.project.path.is_empty() {
@@ -155,6 +211,90 @@ impl WorkspaceConfig {
             workspace_root.join(&self.project.path)
         };
         Some(path)
+    }
+
+    /// Resolve only the claude_plugins directories from [local-claude-plugin].
+    /// Returns (path, source_label) pairs.
+    pub fn claude_plugin_dirs(&self) -> Vec<(PathBuf, String)> {
+        let user_claude = if let Some(home) = std::env::var("USERPROFILE")
+            .or_else(|_| std::env::var("HOME"))
+            .ok()
+        {
+            PathBuf::from(home).join(".claude")
+        } else {
+            PathBuf::new()
+        };
+
+        self.local_claude_plugin
+            .claude_plugins
+            .iter()
+            .map(|plugin_dir| {
+                let expanded = expand_tilde(plugin_dir);
+                let resolved = if expanded.is_absolute() {
+                    expanded
+                } else {
+                    PathBuf::from(plugin_dir)
+                };
+                let source = path_relative_to(&resolved, &user_claude);
+                (resolved, source)
+            })
+            .collect()
+    }
+
+    /// Resolve all plugin directories from local-claude-plugin and local-other-plugin sections.
+    /// Returns (path, source_label) pairs where source_label is a path relative to
+    /// ~/.claude/plugins/marketplaces/ (e.g. "claude-plugins-official/plugins").
+    pub fn plugin_dirs(&self, workspace_root: &Path) -> Vec<(PathBuf, String)> {
+        let mut dirs = Vec::new();
+
+        let user_claude = if let Some(home) = std::env::var("USERPROFILE")
+            .or_else(|_| std::env::var("HOME"))
+            .ok()
+        {
+            PathBuf::from(home).join(".claude")
+        } else {
+            PathBuf::new()
+        };
+
+        // From [local-claude-plugin].claude_plugins — each path is a directory containing plugins
+        for plugin_dir in &self.local_claude_plugin.claude_plugins {
+            let expanded = expand_tilde(plugin_dir);
+            let resolved = if expanded.is_absolute() {
+                expanded
+            } else {
+                workspace_root.join(&expanded)
+            };
+            let source = path_relative_to(&resolved, &user_claude);
+            dirs.push((resolved, source));
+        }
+
+        // From [local-other-plugin].other_plugins — scan subdirectories of this path
+        if let Some(other) = &self.local_other_plugin.other_plugins {
+            let expanded = expand_tilde(other);
+            let resolved = if expanded.is_absolute() {
+                expanded
+            } else {
+                workspace_root.join(&expanded)
+            };
+            // Each subdirectory is a plugin marketplace
+            if resolved.is_dir() {
+                if let Ok(entries) = std::fs::read_dir(&resolved) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_dir() {
+                            if let Some(name) = entry.file_name().to_str() {
+                                if !name.starts_with('.') {
+                                    let source = path_relative_to(&path, &user_claude);
+                                    dirs.push((path, source));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        dirs
     }
 }
 
@@ -171,6 +311,19 @@ fn expand_tilde(path: &str) -> PathBuf {
     PathBuf::from(path)
 }
 
+/// Return `path` relative to `base`, using forward slashes. Falls back to the
+/// file name if `path` is not under `base`.
+fn path_relative_to(path: &Path, base: &Path) -> String {
+    if let Ok(rel) = path.strip_prefix(base) {
+        rel.to_string_lossy().replace('\\', "/")
+    } else {
+        path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("plugin")
+            .to_string()
+    }
+}
+
 const DEFAULT_WORKSPACE_TOML: &str = r#"# cc-workspace.toml — Workspace registry for convenient-claude
 
 [external]
@@ -182,3 +335,113 @@ path = "~/.claude"
 ["current project"]
 path = ""
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    /// Test that the actual cc-workspace.toml in this repo parses successfully.
+    #[test]
+    fn test_parse_real_workspace_config() {
+        let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap();
+        let config = WorkspaceConfig::load(workspace_root)
+            .expect("cc-workspace.toml should parse without error");
+
+        // Should have plugin directories from [local-claude-plugin]
+        assert!(
+            !config.local_claude_plugin.claude_plugins.is_empty(),
+            "claude_plugins should not be empty"
+        );
+
+        // Should have other_plugins from [local-other-plugin]
+        assert!(
+            config.local_other_plugin.other_plugins.is_some(),
+            "other_plugins should be set"
+        );
+    }
+
+    /// Test that claude_plugin_dirs returns exactly the two configured directories.
+    #[test]
+    fn test_claude_plugin_dirs_resolve_to_existing_directories() {
+        let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap();
+        let config = WorkspaceConfig::load(workspace_root)
+            .expect("cc-workspace.toml should parse");
+
+        let dirs = config.claude_plugin_dirs();
+        assert_eq!(
+            dirs.len(),
+            2,
+            "should have exactly 2 claude_plugin directories"
+        );
+
+        for (path, label) in &dirs {
+            assert!(
+                path.is_dir(),
+                "plugin dir {} ({}) should exist on disk",
+                label,
+                path.display()
+            );
+        }
+    }
+
+    /// Test that claude_plugin_dirs discovers actual plugin subdirectories.
+    #[test]
+    fn test_claude_plugin_dirs_contain_plugins() {
+        let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap();
+        let config = WorkspaceConfig::load(workspace_root)
+            .expect("cc-workspace.toml should parse");
+
+        let dirs = config.claude_plugin_dirs();
+        let mut total_plugins = 0;
+
+        for (dir, label) in &dirs {
+            if dir.is_dir() {
+                let entries: Vec<_> = fs::read_dir(dir)
+                    .unwrap()
+                    .flatten()
+                    .filter(|e| e.path().is_dir())
+                    .collect();
+                total_plugins += entries.len();
+                println!(
+                    "  source {} -> {} plugins",
+                    label,
+                    entries.len()
+                );
+            }
+        }
+
+        assert!(
+            total_plugins > 0,
+            "claude_plugin dirs should contain plugins, found {total_plugins}"
+        );
+    }
+
+    /// Test that missing sections in TOML don't break parsing.
+    #[test]
+    fn test_minimal_config_parses() {
+        let toml_str = r#"
+[local-claude-plugin]
+claude_plugins = []
+
+[local-other-plugin]
+"#;
+        let config: WorkspaceConfig = toml::from_str(toml_str).expect("minimal config should parse");
+        assert!(config.local_claude_plugin.claude_plugins.is_empty());
+        assert!(config.external.projects.is_empty());
+        assert!(config.local.path.is_empty());
+        assert!(config.project.path.is_empty());
+    }
+}

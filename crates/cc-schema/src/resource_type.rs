@@ -10,6 +10,7 @@ pub enum ResourceType {
     Agent,
     Hook,
     Rule,
+    Plugin,
 }
 
 impl ResourceType {
@@ -21,6 +22,7 @@ impl ResourceType {
             ResourceType::Agent => "agents",
             ResourceType::Hook => "", // hooks live in settings.json
             ResourceType::Rule => "rules",
+            ResourceType::Plugin => "plugins",
         }
     }
 
@@ -40,6 +42,7 @@ impl ResourceType {
             ResourceType::Agent,
             ResourceType::Hook,
             ResourceType::Rule,
+            ResourceType::Plugin,
         ]
     }
 }
@@ -52,6 +55,7 @@ impl fmt::Display for ResourceType {
             ResourceType::Agent => write!(f, "agent"),
             ResourceType::Hook => write!(f, "hook"),
             ResourceType::Rule => write!(f, "rule"),
+            ResourceType::Plugin => write!(f, "plugin"),
         }
     }
 }

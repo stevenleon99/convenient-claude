@@ -15,6 +15,7 @@ fn folder_candidates(resource_type: ResourceType) -> Vec<&'static str> {
         ResourceType::Agent => vec!["agents", "agent", "AGENT", "Agents"],
         ResourceType::Rule => vec!["rules", "rule", "RULE", "Rules"],
         ResourceType::Hook => vec!["hooks", "hook", "HOOK", "Hooks"],
+        ResourceType::Plugin => vec!["plugins", "plugin", "PLUGIN", "Plugins"],
     }
 }
 
@@ -43,7 +44,12 @@ pub fn discover_resources(
 
     // Try loading workspace config
     if let Some(config) = WorkspaceConfig::load(&workspace_root) {
-        let registries = config.registries(&workspace_root);
+        let mut registries = config.registries(&workspace_root);
+
+        // Also include other_plugin directories as registries
+        // (e.g., ~/.claude/plugins/marketplaces/fullstack-dev-skills)
+        registries.extend(config.other_plugin_registries());
+
         for registry in &registries {
             let origin = classify_origin(&registry.label);
             discover_from_registry(
@@ -206,6 +212,7 @@ fn load_entry_from_file(
             truncate(&rule.body, 80)
         }
         ResourceType::Hook => None,
+        ResourceType::Plugin => None,
     };
 
     Some(ResourceEntry {

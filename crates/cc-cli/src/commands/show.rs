@@ -69,6 +69,9 @@ pub fn run(resource_type: &str, name: &str, project_dir: &Path) -> Result<()> {
         cc_schema::ResourceType::Hook => {
             bail!("Use 'cc list hooks' to view hooks.");
         }
+        cc_schema::ResourceType::Plugin => {
+            bail!("Use 'cc list plugins' to view plugins.");
+        }
     }
     Ok(())
 }

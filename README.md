@@ -27,6 +27,7 @@ Existing tools in the Claude Code ecosystem each handle a narrow slice of resour
 - **Session Management**: Track active skills/agents with token and resource usage stats
 - **Validation**: Validate all project resources with auto-fix capabilities
 - **Configuration Merging**: Three-way merge of user, project, and session settings
+- **Interactive TUI**: Full-screen terminal dashboard for browsing and inspecting resources
 - **Shell Completions**: Generate completions for bash, zsh, fish, powershell
 
 ## Installation
@@ -106,6 +107,19 @@ cc validate --fix            # Auto-fix warnings
 ```bash
 cc doctor                    # Check configuration health
 ```
+
+### Interactive TUI dashboard
+
+```bash
+cc tui                      # Launch full-screen TUI
+```
+
+Keybindings inside the TUI:
+- `↑`/`↓` or `j`/`k` — Navigate resources
+- `Tab`/`Shift+Tab` — Switch resource type (Skills, Commands, Agents, Rules)
+- `Enter` — Toggle detail panel for selected resource
+- `r` — Refresh resource list
+- `q` or `Esc` — Quit
 
 ### Session management
 

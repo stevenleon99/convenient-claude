@@ -81,6 +81,11 @@ pub fn install_from_path(
                 details: "Hooks should be managed via settings, not installed from files".into(),
             });
         }
+        ResourceType::Plugin => {
+            return Err(CoreError::ValidationFailed {
+                details: "Plugins are read-only and cannot be installed via cc".into(),
+            });
+        }
     };
 
     let target_dir = resource_dir(project_dir, resource_type);
