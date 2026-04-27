@@ -88,7 +88,7 @@ impl App {
         // Scan project .claude/<type>/ to find what's physically installed
         self.project_installed = scan_project_resources(project_dir, self.resource_type);
 
-        let extern_libs = cc_core::sync::list_extern_libs(project_dir);
+        let extern_libs = cc_core::list_extern_libs(project_dir);
         let mut entries =
             cc_core::discover_resources(self.resource_type, workspace_root, &extern_libs);
         cc_core::resolve_resources(&mut entries);
@@ -302,7 +302,7 @@ impl App {
         let mut errors = Vec::new();
 
         for (rt, indices) in &all_selections {
-            let extern_libs = cc_core::sync::list_extern_libs(project_dir);
+            let extern_libs = cc_core::list_extern_libs(project_dir);
             let mut entries = cc_core::discover_resources(*rt, workspace_root, &extern_libs);
             cc_core::resolve_resources(&mut entries);
 

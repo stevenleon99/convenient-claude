@@ -43,7 +43,7 @@ fn start_session(
     ctx.activate_agents(agents);
 
     // Discover commands from project
-    let extern_libs = cc_core::sync::list_extern_libs(project_dir);
+    let extern_libs = cc_core::list_extern_libs(project_dir);
     let commands =
         cc_core::discover_resources(cc_schema::ResourceType::Command, project_dir, &extern_libs);
     let active_cmds: Vec<String> = commands.iter().map(|c| c.name.clone()).collect();

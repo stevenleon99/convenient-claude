@@ -35,7 +35,7 @@ fn list_resource(
     project_dir: &Path,
     workspace_root: &Path,
 ) -> Result<()> {
-    let extern_libs = cc_core::sync::list_extern_libs(project_dir);
+    let extern_libs = cc_core::list_extern_libs(project_dir);
     let mut entries = cc_core::discover_resources(resource_type, workspace_root, &extern_libs);
 
     // Apply filter
@@ -101,7 +101,7 @@ fn list_all(format: &OutputFormat, project_dir: &Path, workspace_root: &Path) ->
         if *rt == ResourceType::Hook {
             continue;
         }
-        let extern_libs = cc_core::sync::list_extern_libs(project_dir);
+        let extern_libs = cc_core::list_extern_libs(project_dir);
         let mut entries = cc_core::discover_resources(*rt, workspace_root, &extern_libs);
         cc_core::resolve_resources(&mut entries);
         if !entries.is_empty() {

@@ -227,7 +227,7 @@ fn load_entry_from_file(
 }
 
 fn build_fallback_origins(project_dir: &Path) -> Vec<Origin> {
-    let mut origins: Vec<Origin> = crate::sync::list_extern_libs(project_dir)
+    let mut origins: Vec<Origin> = crate::list_extern_libs(project_dir)
         .into_iter()
         .map(|lib| Origin::External { library: lib })
         .collect();

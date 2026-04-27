@@ -63,13 +63,6 @@ pub enum Commands {
         fix: bool,
     },
 
-    /// Sync extern/ submodules.
-    Sync {
-        /// Preview changes without applying.
-        #[arg(long)]
-        dry_run: bool,
-    },
-
     /// Session management.
     Session {
         #[command(subcommand)]
@@ -90,12 +83,6 @@ pub enum Commands {
 
     /// Diagnose setup issues.
     Doctor,
-
-    /// Generate shell completions.
-    Completions {
-        /// Target shell.
-        shell: String,
-    },
 
     /// Launch interactive TUI dashboard.
     Tui,

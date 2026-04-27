@@ -45,8 +45,6 @@ fn main() -> Result<()> {
             commands::validate::run(&project_dir, fix, &workspace_root)?
         }
 
-        args::Commands::Sync { dry_run } => commands::sync::run(&project_dir, dry_run)?,
-
         args::Commands::Session { action } => commands::session::run(&action, &project_dir)?,
 
         args::Commands::Config { action } => {
@@ -56,11 +54,6 @@ fn main() -> Result<()> {
         args::Commands::Stats { action } => commands::stats_cmd::run_stats(&action, &project_dir)?,
 
         args::Commands::Doctor => commands::doctor::run(&project_dir, &workspace_root)?,
-
-        args::Commands::Completions { shell } => {
-            eprintln!("Shell completions for '{shell}' are not yet implemented.");
-            eprintln!("Use 'cc --help' for available commands.");
-        }
 
         args::Commands::Tui => commands::tui::run(&project_dir, &workspace_root)?,
     }

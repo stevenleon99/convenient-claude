@@ -48,7 +48,7 @@ fn add_resource(
     };
 
     // Discover from all origins or specific source
-    let extern_libs = cc_core::sync::list_extern_libs(project_dir);
+    let extern_libs = cc_core::list_extern_libs(project_dir);
     let sources = if let Some(source) = from {
         if source.starts_with("extern/") {
             vec![source.trim_start_matches("extern/").to_string()]
