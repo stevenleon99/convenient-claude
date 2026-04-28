@@ -32,21 +32,26 @@ Existing tools in the Claude Code ecosystem each handle a narrow slice of resour
 │                       CLI Layer                           │
 │                    (crates/cc-cli)                        │
 │  clap derive • command dispatch • output formatting       │
-│  interactive prompts • shell completions                  │
+│  interactive prompts • ratatui TUI                        │
 ├──────────────────────────────────────────────────────────┤
 │                     Service Layer                         │
 │                    (crates/cc-core)                       │
 │  resource resolution • session management                 │
-│  conflict resolution • validation • sync                  │
+│  conflict resolution • validation                         │
 ├──────────────────────────────────────────────────────────┤
 │                      Data Layer                           │
 │                   (crates/cc-schema)                      │
 │  schema definitions • frontmatter parsing                 │
 │  JSON/TOML/YAML serialization • file system I/O           │
+├──────────────────────────────────────────────────────────┤
+│                    HUD Renderer                           │
+│                    (crates/cc-hud)                        │
+│  stdin parsing • transcript parsing • ANSI rendering      │
+│  config counting • git status • layout engine             │
 └──────────────────────────────────────────────────────────┘
 ```
 
-**Dependency graph:** `cc-cli → cc-core → cc-schema` — strictly one-directional, no circular dependencies.
+**Dependency graph:** `cc-cli → cc-core → cc-schema`, `cc-cli → cc-hud` — strictly one-directional, no circular dependencies.
 
 ---
 
@@ -63,6 +68,7 @@ cc
 │   ├── list agents [FILTER]      # List agents
 │   ├── list hooks                # List hooks
 │   ├── list rules [FILTER]       # List rules
+│   ├── list plugins              # List local plugins
 │   └── list all                  # List everything, grouped by type
 ├── add                           # Install a resource
 │   ├── add skill <NAME>          # Install a skill
@@ -82,17 +88,16 @@ cc
 ├── show <TYPE> <NAME>            # Display resource details + origin
 ├── validate                      # Validate all project resources
 │   └── --fix                     # Auto-fix what's fixable
-├── sync                          # Sync extern/ submodules
-│   └── --dry-run                 # Preview changes without applying
 ├── session                       # Session management
 │   ├── session start             # Start a managed session
 │   │   ├── --mode <MODE>         #   conversation | loop | interactive
 │   │   ├── --skills <LIST>       #   Activate specific skills
-│   │   ├── --agents <LIST>       #   Activate specific agents
-│   │   └── --config <FILE>       #   Load session config from file
+│   │   └── --agents <LIST>       #   Activate specific agents
 │   ├── session stop              # Stop active session
 │   ├── session status            # Show active session info
-│   └── session stats             # Show resource and token usage stats
+│   ├── session stats             # Show resource and token usage stats
+│   ├── session hud [--layout]    # Run HUD status line (reads JSON from stdin)
+│   └── session setup-hud         # Print settings.json statusLine command
 ├── config                        # View/edit merged configuration
 │   ├── config show               # Print effective (merged) settings
 │   ├── config get <KEY>          # Get a specific config value
@@ -105,9 +110,7 @@ cc
 │   │   └── --last <N>            #   Last N sessions (default: 10)
 │   └── stats resources           # Per-resource usage breakdown
 ├── doctor                        # Diagnose setup issues
-├── tui                           # Launch interactive TUI dashboard
-└── completions                   # Generate shell completions
-    └── <SHELL>                   # bash | zsh | fish | powershell
+└── tui                           # Launch interactive TUI dashboard
 ```
 
 ### Command flags (global)
@@ -204,18 +207,19 @@ The CLI targets PowerShell, bash, zsh, and fish. All output must render correctl
 
 `ratatui` powers the `cc tui` command — a persistent, interactive terminal dashboard for browsing resources, selecting items, and viewing snapshots. The TUI runs a main loop with event polling and only exits when the user presses `q` or `Esc`.
 
-#### Key dependencies (revised)
+#### Key dependencies
 
 ```toml
 [dependencies]
 cc-core = { path = "../cc-core" }
+cc-hud = { path = "../cc-hud" }
+cc-schema = { path = "../cc-schema" }
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 # Terminal rendering
-owo-colors = "4"          # Zero-alloc terminal colors
-console = "0.15"          # Terminal abstraction, alignment, capability detection
+owo-colors = { version = "4", features = ["supports-colors"] }
+console = "0.15"          # Terminal abstraction, alignment
 comfy-table = "7"         # Table output
-termimad = "0.31"         # Markdown rendering in terminal
 indicatif = "0.17"        # Progress bars and spinners
 inquire = "0.7"           # Interactive prompts with fuzzy search
 serde_json = "1"          # JSON output format
@@ -228,35 +232,31 @@ crossterm = "0.28"        # Terminal backend (raw mode, events, alternate screen
 
 ```
 crates/cc-cli/src/
-├── main.rs              # Entry point, top-level error handling
+├── main.rs              # Entry point, workspace/project resolution
 ├── args.rs              # clap derive structs for all commands
+├── output.rs            # Formatting helpers (table, json, plain)
 ├── commands/
-│   ├── mod.rs           # Command dispatch trait
+│   ├── mod.rs           # Command module exports
 │   ├── init.rs          # cc init
 │   ├── list.rs          # cc list <type>
 │   ├── add.rs           # cc add <type> <name>
 │   ├── remove.rs        # cc remove <type> <name>
 │   ├── show.rs          # cc show <type> <name>
 │   ├── validate.rs      # cc validate
-│   ├── sync.rs          # cc sync
-│   ├── session.rs       # cc session start/stop/status/stats
-│   ├── stats.rs         # cc stats session/history/resources
-│   ├── config_cmd.rs    # cc config show/get/set/diff
+│   ├── session.rs       # cc session (start/stop/status/stats/hud/setup-hud)
+│   ├── stats_cmd.rs     # cc stats + cc config commands
 │   ├── doctor.rs        # cc doctor
-│   ├── tui.rs           # cc tui — interactive TUI entry point
-│   ├── stats.rs         # cc stats session/history/resources
-│   └── completions.rs   # cc completions <shell>
+│   └── tui.rs           # cc tui — interactive TUI entry point
 ├── tui/
 │   ├── mod.rs           # TUI module root
-│   ├── app.rs           # App state, navigation, snapshot logic
+│   ├── app.rs           # App state, navigation, resource browsing
 │   ├── ui.rs            # ratatui rendering (header, table, detail, status)
 │   └── event.rs         # Keyboard event handling
-└── output.rs            # Formatting helpers (table, json, plain)
 ```
 
 ### 3.2 Service Layer (`crates/cc-core`)
 
-**Responsibilities:** resource resolution, conflict merging, session management, validation, external sync.
+**Responsibilities:** resource resolution, conflict merging, session management, validation.
 
 #### Resource resolution
 
@@ -281,38 +281,37 @@ When a resource exists in multiple origins, the highest-precedence one wins. `cc
 ```
 crates/cc-core/src/
 ├── lib.rs               # Public API re-exports
+├── error.rs             # CoreError enum
+├── init.rs              # .claude/ directory initialization
+├── paths.rs             # Path resolution utilities
+├── workspace.rs         # cc-workspace.toml handling
 ├── resource/
-│   ├── mod.rs           # Resource trait, ResourceType enum
+│   ├── mod.rs           # ResourceEntry struct
 │   ├── discovery.rs     # Scan all origins for resources
 │   ├── resolution.rs    # Merge across origins, apply precedence
-│   └── install.rs       # Copy/link resource into target scope
-├── skill.rs             # Skill-specific loading and validation
-├── agent.rs             # Agent-specific loading and validation
-├── command.rs           # Command-specific loading and validation
+│   └── install.rs       # Copy resource into target scope
+├── skill.rs             # Skill loading by origin
+├── agent.rs             # Agent loading by origin
+├── command.rs           # Command loading by origin
 ├── hook.rs              # Hook registration and management
-├── rule.rs              # Rule loading and management
+├── rule.rs              # Rule loading and removal
 ├── session/
-│   ├── mod.rs           # Session lifecycle
+│   ├── mod.rs           # Session persistence
 │   ├── context.rs       # Active resource set for a session
 │   ├── tracker.rs       # Token and resource usage tracking
 │   └── modes.rs         # Conversation, loop, interactive modes
 ├── stats/
-│   ├── mod.rs           # Stats aggregation and reporting
-│   ├── token.rs         # Token counting and cost estimation
-│   └── usage.rs         # Per-resource usage breakdown
+│   ├── mod.rs           # Stats history loading
+│   ├── token.rs         # Cost estimation
+│   └── usage.rs         # Per-resource usage aggregation
 ├── config/
 │   ├── mod.rs           # Config loading and merging
 │   ├── settings.rs      # settings.json read/write
-│   └── merge.rs         # Three-way merge (user + project + session)
-├── sync/
-│   ├── mod.rs           # External library sync
-│   └── git.rs           # Git submodule operations
-├── validate/
-│   ├── mod.rs           # Validation orchestration
-│   ├── schema.rs        # Schema validation per resource type
-│   └── conflicts.rs     # Cross-resource conflict detection
-├── origin.rs            # Origin enum, path resolution per origin
-└── error.rs             # Domain error types
+│   └── merge.rs         # Three-way merge (user + project)
+└── validate/
+    ├── mod.rs           # ValidationFinding, ValidationLevel
+    ├── schema.rs        # Schema validation per resource type
+    └── conflicts.rs     # Cross-resource conflict detection
 ```
 
 #### Key dependencies
@@ -320,16 +319,14 @@ crates/cc-core/src/
 ```toml
 [dependencies]
 cc-schema = { path = "../cc-schema" }
-walkdir = "2"            # Recursive directory traversal
-glob = "0.3"             # Glob pattern matching for resource files
-git2 = "0.19"            # Git operations (submodule sync)
-# OR shell out to git CLI — simpler but requires git on PATH
-regex = "1"
-chrono = "0.4"           # Timestamps in session logs
-tiktoken-rs = "0.6"     # Token counting for estimation
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"              # Workspace config parsing
+walkdir = "2"             # Recursive directory traversal
+chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }  # Session IDs
-tracing = "0.1"          # Structured logging
-thiserror = "2"          # Derived error types
+tracing = "0.1"           # Structured logging
+thiserror = "2"           # Derived error types
 ```
 
 ### 3.3 Data Layer (`crates/cc-schema`)
@@ -600,7 +597,7 @@ crates/cc-schema/src/
 ├── hook.rs              # HookEvent, HookMatcher, HookEntry
 ├── rule.rs              # Rule struct
 ├── settings.rs          # Settings, Permissions
-├── resource_type.rs     # ResourceType enum (Skill, Command, Agent, Hook, Rule)
+├── resource_type.rs     # ResourceType enum (Skill, Command, Agent, Hook, Rule, Plugin)
 ├── origin.rs            # Origin enum (External, User, Project)
 ├── frontmatter.rs       # YAML frontmatter extraction from Markdown
 ├── stats.rs             # SessionStats, TokenUsage, ResourceUsage structs
@@ -618,6 +615,80 @@ serde_yaml = "0.9"       # YAML frontmatter parsing
 pulldown-cmark = "0.11"  # Markdown parsing (for body extraction)
 thiserror = "2"
 ```
+
+### 3.4 HUD Renderer (`crates/cc-hud`)
+
+**Responsibilities:** Read JSON from Claude Code stdin, parse transcript files, render ANSI status line output.
+
+The HUD runs as a `statusLine` command in Claude Code's settings.json. Claude Code pipes JSON to stdin every ~300ms, and the HUD prints ANSI-colored status lines to stdout.
+
+#### Data Flow
+
+```
+Claude Code (every ~300ms)
+    │
+    │  JSON via stdin
+    │  { model, context_window, cwd, rate_limits, cost, transcript_path }
+    │
+    ▼
+cc session hud
+    │
+    │  1. Parse stdin JSON
+    │  2. Parse transcript JSONL (tools, agents, todos)
+    │  3. Count configs (CLAUDE.md, rules, MCPs, hooks)
+    │  4. Get git status
+    │  5. Render ANSI output
+    │
+    ▼
+ANSI status lines (stdout)
+    │
+    ▼
+Claude Code status bar
+```
+
+#### Module structure
+
+```
+crates/cc-hud/src/
+├── lib.rs               # Public API: RenderContext, StdinData, TranscriptData
+├── types.rs             # All data structures (StdinData, TranscriptData, ToolEntry, etc.)
+├── stdin.rs             # Timeout-based stdin reader + extraction helpers
+├── transcript.rs        # JSONL transcript parser
+├── config_count.rs      # Count CLAUDE.md/rules/MCPs/hooks
+├── git.rs               # Git status via CLI
+└── render/
+    ├── mod.rs           # Layout engine (compact/expanded)
+    ├── colors.rs        # ANSI color helpers
+    ├── terminal.rs      # Terminal width, bar drawing, wrapping
+    ├── session.rs       # Main session line (model, context bar, usage)
+    ├── tools.rs         # Tool activity line
+    ├── agents.rs        # Agent tracking line
+    └── todos.rs         # Todo progress line
+```
+
+#### Key dependencies
+
+```toml
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+owo-colors = { version = "4", features = ["supports-colors"] }
+anyhow = "1"
+```
+
+#### Display Elements
+
+| Element | Description |
+|---------|-------------|
+| **Model badge** | `[Sonnet 4.6]` — current model name |
+| **Context bar** | `████░░░░░░ 45%` — visual usage bar (green/yellow/red) |
+| **Project path** | Last N segments of working directory |
+| **Git status** | `git:(main*)` — branch, dirty marker, ahead/behind |
+| **Config counts** | `1 CLAUDE.md`, `2 rules`, `3 MCPs`, `4 hooks` |
+| **Usage limits** | `Usage ██░░░░░░░ 25% (5h)` — rate limit consumption |
+| **Cost** | `$1.23` — session cost estimate |
+| **Duration** | `⏱ 1h 30m` — session elapsed time |
 
 ---
 
@@ -1251,9 +1322,10 @@ Keybindings:
 
 | Crate | Role | Key Dependencies |
 |-------|------|-----------------|
-| `cc-cli` | CLI entrypoint, dispatch, output | `cc-core`, `clap`, `anyhow`, `colored`, `comfy-table`, `dialoguer` |
+| `cc-cli` | CLI entrypoint, dispatch, output, TUI | `cc-core`, `cc-hud`, `clap`, `anyhow`, `ratatui`, `crossterm` |
 | `cc-core` | Business logic, resolution, sessions | `cc-schema`, `walkdir`, `thiserror`, `tracing` |
 | `cc-schema` | Data structures, parsing, I/O | `serde`, `serde_json`, `serde_yaml`, `pulldown-cmark`, `thiserror` |
+| `cc-hud` | HUD status line renderer | `serde`, `serde_json`, `chrono`, `owo-colors`, `anyhow` |
 
 ## Appendix B: File Format Reference
 

@@ -2,6 +2,7 @@
 members = [
     "crates/cc-cli",
     "crates/cc-core",
+    "crates/cc-hud",
     "crates/cc-schema",
 ]
 resolver = "2"

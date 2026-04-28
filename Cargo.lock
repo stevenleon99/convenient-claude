@@ -134,6 +134,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cc-core",
+ "cc-hud",
  "cc-schema",
  "clap",
  "comfy-table",
@@ -160,6 +161,17 @@ dependencies = [
  "tracing",
  "uuid",
  "walkdir",
+]
+
+[[package]]
+name = "cc-hud"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "owo-colors",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

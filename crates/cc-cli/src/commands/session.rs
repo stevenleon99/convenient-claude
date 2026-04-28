@@ -13,6 +13,8 @@ pub fn run(action: &SessionAction, project_dir: &Path) -> Result<()> {
         SessionAction::Stop => stop_session(project_dir),
         SessionAction::Status => session_status(project_dir),
         SessionAction::Stats => session_stats(project_dir),
+        SessionAction::Hud { layout } => run_hud(layout),
+        SessionAction::SetupHud => setup_hud(),
     }
 }
 
@@ -113,5 +115,82 @@ fn session_stats(project_dir: &Path) -> Result<()> {
         .ok_or_else(|| anyhow::anyhow!("No active session."))?;
 
     output::print_session_stats(&stats);
+    Ok(())
+}
+
+fn run_hud(layout: &str) -> Result<()> {
+    // Read JSON from stdin (piped by Claude Code every ~300ms)
+    let stdin_data = match cc_hud::stdin::read_stdin()? {
+        Some(data) => data,
+        None => return Ok(()), // No stdin (not invoked by Claude Code)
+    };
+
+    // Parse transcript
+    let transcript_path = stdin_data.transcript_path.as_deref().unwrap_or("");
+    let transcript = cc_hud::transcript::parse_transcript(transcript_path);
+
+    // Count configs
+    let (claude_md, rules, mcps, hooks) =
+        cc_hud::config_count::count_configs(stdin_data.cwd.as_deref());
+
+    // Git status
+    let git_status = cc_hud::git::get_git_status(stdin_data.cwd.as_deref());
+
+    // Usage data
+    let usage_data = cc_hud::stdin::get_usage_from_stdin(&stdin_data)
+        .unwrap_or_default();
+
+    // Layout
+    let hud_layout = match layout.to_lowercase().as_str() {
+        "compact" => cc_hud::types::Layout::Compact,
+        _ => cc_hud::types::Layout::Expanded,
+    };
+
+    let mut config = cc_hud::types::HudConfig::default();
+    config.layout = hud_layout;
+
+    let ctx = cc_hud::types::RenderContext {
+        stdin: stdin_data,
+        transcript,
+        claude_md_count: claude_md,
+        rules_count: rules,
+        mcp_count: mcps,
+        hooks_count: hooks,
+        git_status,
+        usage_data,
+        config,
+    };
+
+    let lines = cc_hud::render::render(&ctx);
+    for line in lines {
+        println!("{}", line);
+    }
+
+    Ok(())
+}
+
+fn setup_hud() -> Result<()> {
+    let exe_path = std::env::current_exe()?;
+    let exe_str = exe_path.to_string_lossy();
+
+    // Escape backslashes for JSON on Windows
+    let exe_escaped = exe_str.replace('\\', "\\\\");
+
+    let command = format!("\"{}\" session hud", exe_escaped);
+
+    println!("Add this to ~/.claude/settings.json:\n");
+
+    let json = serde_json::json!({
+        "statusLine": {
+            "type": "command",
+            "command": command
+        }
+    });
+
+    println!("{}", serde_json::to_string_pretty(&json)?);
+
+    println!("\nOr add just the statusLine entry to your existing settings.json:");
+    println!("  \"statusLine\": {{ \"type\": \"command\", \"command\": \"\\\"{}\\\" session hud\" }}", exe_escaped);
+
     Ok(())
 }

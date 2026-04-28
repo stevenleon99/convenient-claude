@@ -228,6 +228,14 @@ pub enum SessionAction {
     Status,
     /// Show resource and token usage stats.
     Stats,
+    /// Run the HUD status line (reads JSON from stdin, prints ANSI to stdout).
+    Hud {
+        /// Layout mode: compact or expanded.
+        #[arg(long, default_value = "expanded")]
+        layout: String,
+    },
+    /// Print the settings.json statusLine command for Claude Code.
+    SetupHud,
 }
 
 #[derive(Subcommand)]
