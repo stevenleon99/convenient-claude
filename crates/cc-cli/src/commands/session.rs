@@ -119,6 +119,10 @@ fn session_stats(project_dir: &Path) -> Result<()> {
 }
 
 fn run_hud(layout: &str) -> Result<()> {
+    // Force colors: the statusLine pipe is not a TTY, but Claude Code's
+    // status bar does support ANSI. Without this, owo-colors strips output.
+    owo_colors::set_override(true);
+
     // Read JSON from stdin (piped by Claude Code every ~300ms)
     let stdin_data = match cc_hud::stdin::read_stdin()? {
         Some(data) => data,

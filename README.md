@@ -25,10 +25,10 @@ Existing tools in the Claude Code ecosystem each handle a narrow slice of resour
 - **Resource Installation**: Install skills, commands, agents, and rules from external sources
 - **Conflict Resolution**: Precedence-based merging when resources exist in multiple origins
 - **Session Management**: Track active skills/agents with token and resource usage stats
+- **HUD Status Line**: Native Rust status line renderer for Claude Code's status bar
 - **Validation**: Validate all project resources with auto-fix capabilities
 - **Configuration Merging**: Three-way merge of user, project, and session settings
 - **Interactive TUI**: Full-screen terminal dashboard for browsing and inspecting resources
-- **Shell Completions**: Generate completions for bash, zsh, fish, powershell
 
 ## Installation
 
@@ -130,6 +130,18 @@ cc session stats             # Token and resource usage
 cc session stop              # End session and save stats
 ```
 
+### HUD status line
+
+```bash
+cc session setup-hud         # Print settings.json statusLine config
+cc session hud               # Run HUD (reads JSON from stdin)
+cc session hud --layout compact  # Compact layout
+```
+
+Add the output from `setup-hud` to `~/.claude/settings.json` under `"statusLine"`, then restart Claude Code. The HUD renders a dynamic status line with model info, context bar, git status, usage limits, cost, and session duration.
+
+![alt text](docs/images/cc-hub-color.png)
+
 ### Stats analytics
 
 ```bash
@@ -148,7 +160,7 @@ cc config set permissions.allow "Bash(cargo build:*)" --scope project
 
 ## Architecture
 
-Three-layer architecture with strict one-directional dependencies:
+Four-layer architecture with strict one-directional dependencies:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -160,8 +172,13 @@ Three-layer architecture with strict one-directional dependencies:
 ├─────────────────────────────────────────────────────────┤
 │                   Data Layer (cc-schema)                 │
 │  schema definitions • frontmatter parsing • file I/O    │
+├─────────────────────────────────────────────────────────┤
+│                HUD Renderer (cc-hud)                     │
+│  stdin parsing • transcript parsing • ANSI rendering    │
 └─────────────────────────────────────────────────────────┘
 ```
+
+**Dependency graph:** `cc-cli → cc-core → cc-schema`, `cc-cli → cc-hud`
 
 ### Resource resolution precedence
 
@@ -174,11 +191,12 @@ External extern/    ← lowest precedence (read-only)
 
 ### Crate structure
 
-| Crate | Files | Purpose |
-|-------|-------|---------|
-| `cc-cli` | 12 | Argument parsing, command handlers, output formatting |
-| `cc-core` | 23 | Business logic, resource discovery, session tracking |
-| `cc-schema` | 12 | Data structures, YAML frontmatter parsing, I/O utilities |
+| Crate | Purpose |
+|-------|---------|
+| `cc-cli` | Argument parsing, command handlers, output formatting, TUI |
+| `cc-core` | Business logic, resource discovery, session tracking |
+| `cc-schema` | Data structures, YAML frontmatter parsing, I/O utilities |
+| `cc-hud` | HUD status line renderer (stdin parsing, ANSI rendering) |
 
 ## Development
 
