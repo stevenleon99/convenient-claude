@@ -4,3 +4,6 @@
 [submodule "extern/everything-claude-code"]
 	path = extern/everything-claude-code
 	url = https://github.com/affaan-m/everything-claude-code.git
+[submodule "extern/claude-hud"]
+	path = extern/claude-hud
+	url = https://github.com/jarrodwatts/claude-hud.git
