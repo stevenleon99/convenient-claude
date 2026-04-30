@@ -7,3 +7,6 @@
 [submodule "extern/claude-hud"]
 	path = extern/claude-hud
 	url = https://github.com/jarrodwatts/claude-hud.git
+[submodule "extern/andrej-karpathy-skills"]
+	path = extern/andrej-karpathy-skills
+	url = https://github.com/forrestchang/andrej-karpathy-skills.git
