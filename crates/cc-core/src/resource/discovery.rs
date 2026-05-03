@@ -3,7 +3,6 @@ use crate::paths::origin_resource_dir;
 use crate::workspace::WorkspaceConfig;
 use cc_schema::{io as schema_io, Agent, Command, Rule, Skill};
 use cc_schema::{Origin, ResourceType};
-use std::path::PathBuf;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -32,19 +31,17 @@ fn subdir_marker(resource_type: ResourceType) -> Option<&'static str> {
 }
 
 /// Discover all resources of a given type across all registries in cc-workspace.toml.
+/// The `app_dir` is the cc application directory containing resource/cc-workspace.toml.
 pub fn discover_resources(
     resource_type: ResourceType,
     project_dir: &Path,
-    _extern_libs: &[String],
+    app_dir: &Path,
 ) -> Vec<ResourceEntry> {
     let mut entries = Vec::new();
 
-    // Find workspace root by searching upward for resource/cc-workspace.toml
-    let workspace_root = find_workspace_root(project_dir);
-
-    // Try loading workspace config
-    if let Some(config) = WorkspaceConfig::load(&workspace_root) {
-        let mut registries = config.registries(&workspace_root);
+    // Try loading workspace config from app_dir
+    if let Some(config) = WorkspaceConfig::load(app_dir) {
+        let mut registries = config.registries(app_dir);
 
         // Also include other_plugin directories as registries
         // (e.g., ~/.claude/plugins/marketplaces/fullstack-dev-skills)
@@ -73,11 +70,24 @@ pub fn discover_resources(
                 }
             }
         }
+
+        // Also scan the project's own .claude/ for installed resources
+        let project_claude = project_dir.join(".claude");
+        if project_claude.is_dir() {
+            discover_from_registry(
+                &project_claude,
+                resource_type,
+                &Origin::Project,
+                "project",
+                &mut entries,
+            );
+        }
+
         // Deduplicate by (name, resource_type) — keep first found (external before local/project)
         deduplicate_entries(&mut entries);
     } else {
-        // Fallback: use the old origin-based discovery if no workspace config
-        let origins = build_fallback_origins(project_dir);
+        // Fallback: use origin-based discovery if no workspace config
+        let origins = build_fallback_origins(project_dir, app_dir);
         for origin in &origins {
             let dir = origin_resource_dir(origin, resource_type, project_dir);
             if dir.is_dir() {
@@ -92,11 +102,11 @@ pub fn discover_resources(
 /// Discover all resources across all types.
 pub fn discover_all_resources(
     project_dir: &Path,
-    extern_libs: &[String],
+    app_dir: &Path,
 ) -> HashMap<ResourceType, Vec<ResourceEntry>> {
     let mut map = HashMap::new();
     for rt in ResourceType::all() {
-        map.insert(*rt, discover_resources(*rt, project_dir, extern_libs));
+        map.insert(*rt, discover_resources(*rt, project_dir, app_dir));
     }
     map
 }
@@ -226,8 +236,8 @@ fn load_entry_from_file(
     })
 }
 
-fn build_fallback_origins(project_dir: &Path) -> Vec<Origin> {
-    let mut origins: Vec<Origin> = crate::list_extern_libs(project_dir)
+fn build_fallback_origins(_project_dir: &Path, app_dir: &Path) -> Vec<Origin> {
+    let mut origins: Vec<Origin> = crate::list_extern_libs(app_dir)
         .into_iter()
         .map(|lib| Origin::External { library: lib })
         .collect();
@@ -255,17 +265,4 @@ fn deduplicate_entries(entries: &mut Vec<ResourceEntry>) {
         let key = (e.name.clone(), e.resource_type, e.registry.clone());
         seen.insert(key)
     });
-}
-
-/// Search upward from a directory to find the workspace root (containing resource/cc-workspace.toml).
-fn find_workspace_root(start: &Path) -> PathBuf {
-    let mut dir = start.to_path_buf();
-    loop {
-        if dir.join("resource").join("cc-workspace.toml").exists() {
-            return dir;
-        }
-        if !dir.pop() {
-            return start.to_path_buf();
-        }
-    }
 }

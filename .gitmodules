@@ -10,3 +10,9 @@
 [submodule "extern/andrej-karpathy-skills"]
 	path = extern/andrej-karpathy-skills
 	url = https://github.com/forrestchang/andrej-karpathy-skills.git
+[submodule "extern/skills"]
+	path = extern/skills
+	url = https://github.com/anthropics/skills.git
+[submodule "extern/ui-ux-pro-max-skill"]
+	path = extern/ui-ux-pro-max-skill
+	url = https://github.com/nextlevelbuilder/ui-ux-pro-max-skill.git

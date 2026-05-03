@@ -7,22 +7,24 @@ use std::collections::HashMap;
 use std::path::Path;
 
 /// Initialize a `.claude/` directory in the project and register it in cc-workspace.toml.
-pub fn init_project(project_dir: &Path, workspace_root: &Path) -> Result<InitResult, CoreError> {
+pub fn init_project(project_dir: &Path, app_dir: &Path) -> Result<InitResult, CoreError> {
     let claude = claude_dir(project_dir);
 
     if claude.exists() {
         let existing = scan_existing(&claude);
+        // Still register the project even if .claude/ exists
+        WorkspaceConfig::register_project(app_dir, project_dir)?;
         return Ok(InitResult::AlreadyExists { existing });
     }
 
     let created = create_fresh(&claude)?;
-    WorkspaceConfig::set_current_project(workspace_root, project_dir)?;
+    WorkspaceConfig::register_project(app_dir, project_dir)?;
 
     Ok(InitResult::Created { items: created })
 }
 
 /// Re-initialize an existing `.claude/` directory: recreate missing dirs/files.
-pub fn reinit_project(project_dir: &Path, workspace_root: &Path) -> Result<Vec<String>, CoreError> {
+pub fn reinit_project(project_dir: &Path, app_dir: &Path) -> Result<Vec<String>, CoreError> {
     let claude = claude_dir(project_dir);
     let mut created = Vec::new();
 
@@ -52,13 +54,13 @@ pub fn reinit_project(project_dir: &Path, workspace_root: &Path) -> Result<Vec<S
     }
 
     // Re-register in workspace
-    WorkspaceConfig::set_current_project(workspace_root, project_dir)?;
+    WorkspaceConfig::register_project(app_dir, project_dir)?;
 
     Ok(created)
 }
 
 /// Force-remove the existing `.claude/` directory and create a fresh one.
-pub fn force_init_project(project_dir: &Path, workspace_root: &Path) -> Result<Vec<String>, CoreError> {
+pub fn force_init_project(project_dir: &Path, app_dir: &Path) -> Result<Vec<String>, CoreError> {
     let claude = claude_dir(project_dir);
 
     if claude.exists() {
@@ -66,7 +68,7 @@ pub fn force_init_project(project_dir: &Path, workspace_root: &Path) -> Result<V
     }
 
     let created = create_fresh(&claude)?;
-    WorkspaceConfig::set_current_project(workspace_root, project_dir)?;
+    WorkspaceConfig::register_project(app_dir, project_dir)?;
 
     Ok(created)
 }

@@ -19,9 +19,11 @@ other_plugins = "C:/Users/Steve/.claude/plugins/marketplaces"
 projects = [
     "extern/claude-skills",
     "extern/everything-claude-code",
+    "extern/skills",
+    "extern/andrej-karpathy-skills",
+    "extern/ui-ux-pro-max-skill/.claude/skills"
 ]
 
-["current project"]
-# Current project's .claude/ directory.
-# This is set by `cc init` and all commands work on this project.
-path = "D:/claude_project/convenient-claude"
+[projects]
+# Registered projects (set by cc init)
+paths = ["D:/stevenleon99.github.io", "D:/claude_project/reinforcement-learning"]

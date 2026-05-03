@@ -3,13 +3,13 @@ use crate::output;
 use anyhow::{bail, Result};
 use std::path::Path;
 
-pub fn run(action: &SessionAction, project_dir: &Path) -> Result<()> {
+pub fn run(action: &SessionAction, project_dir: &Path, app_dir: &Path) -> Result<()> {
     match action {
         SessionAction::Start {
             mode,
             skills,
             agents,
-        } => start_session(mode, skills, agents, project_dir),
+        } => start_session(mode, skills, agents, project_dir, app_dir),
         SessionAction::Stop => stop_session(project_dir),
         SessionAction::Status => session_status(project_dir),
         SessionAction::Stats => session_stats(project_dir),
@@ -32,6 +32,7 @@ fn start_session(
     skills: &[String],
     agents: &[String],
     project_dir: &Path,
+    app_dir: &Path,
 ) -> Result<()> {
     // Check if session already active
     if cc_core::session::load_session(project_dir).is_some() {
@@ -45,9 +46,8 @@ fn start_session(
     ctx.activate_agents(agents);
 
     // Discover commands from project
-    let extern_libs = cc_core::list_extern_libs(project_dir);
     let commands =
-        cc_core::discover_resources(cc_schema::ResourceType::Command, project_dir, &extern_libs);
+        cc_core::discover_resources(cc_schema::ResourceType::Command, project_dir, app_dir);
     let active_cmds: Vec<String> = commands.iter().map(|c| c.name.clone()).collect();
     ctx.activate_commands(&active_cmds);
 

@@ -11,7 +11,7 @@ use crate::tui::app::App;
 use crate::tui::event as tui_event;
 use crate::tui::ui;
 
-pub fn run(project_dir: &std::path::Path, workspace_root: &std::path::Path) -> Result<()> {
+pub fn run(project_dir: &std::path::Path, app_dir: &std::path::Path) -> Result<()> {
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -21,10 +21,10 @@ pub fn run(project_dir: &std::path::Path, workspace_root: &std::path::Path) -> R
 
     // Init app state
     let mut app = App::new();
-    app.refresh(project_dir, workspace_root);
+    app.refresh(project_dir, app_dir);
 
     // Run app loop — restore terminal even on panic
-    let res = run_app(&mut terminal, &mut app, project_dir, workspace_root);
+    let res = run_app(&mut terminal, &mut app, project_dir, app_dir);
 
     // Restore terminal
     disable_raw_mode()?;
@@ -46,12 +46,12 @@ fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut App,
     project_dir: &std::path::Path,
-    workspace_root: &std::path::Path,
+    app_dir: &std::path::Path,
 ) -> io::Result<()> {
     loop {
         terminal.draw(|f| ui::draw(f, app))?;
 
-        if !tui_event::handle_events(app, project_dir, workspace_root)? {
+        if !tui_event::handle_events(app, project_dir, app_dir)? {
             return Ok(());
         }
     }

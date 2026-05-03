@@ -4,7 +4,7 @@ use std::time::Duration;
 use super::app::App;
 
 /// Handle key events. Returns true if the app should continue running.
-pub fn handle_events(app: &mut App, project_dir: &std::path::Path, workspace_root: &std::path::Path) -> std::io::Result<bool> {
+pub fn handle_events(app: &mut App, project_dir: &std::path::Path, app_dir: &std::path::Path) -> std::io::Result<bool> {
     if event::poll(Duration::from_millis(250))? {
         if let Event::Key(key) = event::read()? {
             // Only handle key press events (ignore release/repeat on Windows)
@@ -16,7 +16,7 @@ pub fn handle_events(app: &mut App, project_dir: &std::path::Path, workspace_roo
             if app.confirm_quit {
                 match key.code {
                     KeyCode::Char('y') | KeyCode::Char('Y') => {
-                        app.confirm_and_install(project_dir, workspace_root);
+                        app.confirm_and_install(project_dir, app_dir);
                     }
                     KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Char('q') | KeyCode::Esc => {
                         app.confirm_without_install();
@@ -41,17 +41,17 @@ pub fn handle_events(app: &mut App, project_dir: &std::path::Path, workspace_roo
                 }
                 KeyCode::Tab => {
                     app.next_tab();
-                    app.refresh(project_dir, workspace_root);
+                    app.refresh(project_dir, app_dir);
                 }
                 KeyCode::BackTab => {
                     app.prev_tab();
-                    app.refresh(project_dir, workspace_root);
+                    app.refresh(project_dir, app_dir);
                 }
                 KeyCode::Enter => {
                     app.toggle_detail();
                 }
                 KeyCode::Char('r') => {
-                    app.refresh(project_dir, workspace_root);
+                    app.refresh(project_dir, app_dir);
                 }
                 KeyCode::Char(' ') => {
                     app.toggle_selected();
@@ -63,12 +63,12 @@ pub fn handle_events(app: &mut App, project_dir: &std::path::Path, workspace_roo
                     app.clear_selection();
                 }
                 KeyCode::Char('i') => {
-                    app.install_selected(project_dir, workspace_root);
-                    app.refresh(project_dir, workspace_root);
+                    app.install_selected(project_dir, app_dir);
+                    app.refresh(project_dir, app_dir);
                 }
                 KeyCode::Char('I') => {
-                    app.install_all_selected(project_dir, workspace_root);
-                    app.refresh(project_dir, workspace_root);
+                    app.install_all_selected(project_dir, app_dir);
+                    app.refresh(project_dir, app_dir);
                 }
                 _ => {}
             }

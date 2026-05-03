@@ -4,26 +4,26 @@ use anyhow::{bail, Result};
 use cc_schema::{Origin, ResourceType};
 use std::path::Path;
 
-pub fn run(target: &AddTarget, project_dir: &Path, workspace_root: &Path) -> Result<()> {
+pub fn run(target: &AddTarget, project_dir: &Path, app_dir: &Path) -> Result<()> {
     match target {
         AddTarget::Skill {
             name,
             from,
             to,
             force,
-        } => add_resource(ResourceType::Skill, name, from, to, *force, project_dir, workspace_root),
+        } => add_resource(ResourceType::Skill, name, from, to, *force, project_dir, app_dir),
         AddTarget::Command {
             name,
             from,
             to,
             force,
-        } => add_resource(ResourceType::Command, name, from, to, *force, project_dir, workspace_root),
+        } => add_resource(ResourceType::Command, name, from, to, *force, project_dir, app_dir),
         AddTarget::Agent {
             name,
             from,
             to,
             force,
-        } => add_resource(ResourceType::Agent, name, from, to, *force, project_dir, workspace_root),
+        } => add_resource(ResourceType::Agent, name, from, to, *force, project_dir, app_dir),
         AddTarget::Hook {
             event,
             cmd,
@@ -36,11 +36,11 @@ pub fn run(target: &AddTarget, project_dir: &Path, workspace_root: &Path) -> Res
 fn add_resource(
     resource_type: ResourceType,
     name: &str,
-    from: &Option<String>,
+    _from: &Option<String>,
     to: &str,
     force: bool,
     project_dir: &Path,
-    workspace_root: &Path,
+    app_dir: &Path,
 ) -> Result<()> {
     let target_origin = match to {
         "user" => Origin::User,
@@ -48,19 +48,8 @@ fn add_resource(
     };
 
     // Discover from all origins or specific source
-    let extern_libs = cc_core::list_extern_libs(project_dir);
-    let sources = if let Some(source) = from {
-        if source.starts_with("extern/") {
-            vec![source.trim_start_matches("extern/").to_string()]
-        } else {
-            extern_libs
-        }
-    } else {
-        extern_libs
-    };
-
     let mut entries =
-        cc_core::discover_resources(resource_type, workspace_root, &sources);
+        cc_core::discover_resources(resource_type, project_dir, app_dir);
     cc_core::resolve_resources(&mut entries);
 
     // Find the requested resource

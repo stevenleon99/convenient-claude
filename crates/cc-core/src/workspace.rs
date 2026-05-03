@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 /// Parsed cc-workspace.toml configuration.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct WorkspaceConfig {
     #[serde(default, rename = "local-claude-plugin")]
     pub local_claude_plugin: LocalPluginConfig,
@@ -12,8 +12,8 @@ pub struct WorkspaceConfig {
     pub external: ExternalConfig,
     #[serde(default)]
     pub local: LocalConfig,
-    #[serde(default, rename = "current project")]
-    pub project: ProjectConfig,
+    #[serde(default)]
+    pub projects: ProjectsConfig,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -41,9 +41,9 @@ pub struct LocalConfig {
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct ProjectConfig {
+pub struct ProjectsConfig {
     #[serde(default)]
-    pub path: String,
+    pub paths: Vec<String>,
 }
 
 /// A resolved registry entry with an absolute path and a label.
@@ -151,19 +151,6 @@ impl WorkspaceConfig {
             path: local_path,
         });
 
-        // Current project registry
-        if !self.project.path.is_empty() {
-            let project_path = if Path::new(&self.project.path).is_absolute() {
-                PathBuf::from(&self.project.path)
-            } else {
-                workspace_root.join(&self.project.path)
-            };
-            registries.push(Registry {
-                label: "project".to_string(),
-                path: project_path,
-            });
-        }
-
         registries
     }
 
@@ -200,17 +187,105 @@ impl WorkspaceConfig {
         registries
     }
 
-    /// Get the current project path from the config.
-    pub fn current_project_path(&self, workspace_root: &Path) -> Option<PathBuf> {
-        if self.project.path.is_empty() {
-            return None;
+    /// Get the list of registered project paths.
+    pub fn registered_projects(&self) -> &[String] {
+        &self.projects.paths
+    }
+
+    /// Register a project path in cc-workspace.toml (preserving comments).
+    /// Does nothing if the path is already registered.
+    pub fn register_project(
+        workspace_root: &Path,
+        project_dir: &Path,
+    ) -> Result<(), std::io::Error> {
+        let config_path = workspace_root.join("resource").join("cc-workspace.toml");
+
+        // Ensure the file exists
+        if !config_path.exists() {
+            if let Some(parent) = config_path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(&config_path, DEFAULT_WORKSPACE_TOML)?;
         }
-        let path = if Path::new(&self.project.path).is_absolute() {
-            PathBuf::from(&self.project.path)
+
+        let path_value = project_dir.to_string_lossy();
+        let path_value = path_value.strip_prefix(r"\\?\").unwrap_or(&path_value);
+        let path_value = path_value.replace('\\', "/");
+
+        // Check if already registered
+        let content = std::fs::read_to_string(&config_path)?;
+        let config: WorkspaceConfig = toml::from_str(&content).unwrap_or_default();
+        if config.projects.paths.iter().any(|p| {
+            let normalized = p.replace('\\', "/");
+            normalized == path_value
+        }) {
+            return Ok(());
+        }
+
+        // Parse the TOML and add the new path to [projects]
+        let mut doc = content.clone();
+
+        // Find or create [projects] section with paths array
+        if let Some(idx) = doc.find("[projects]") {
+            // Find the paths = [...] line after [projects]
+            let after_section = &doc[idx..];
+            if let Some(paths_start) = after_section.find("paths = [") {
+                let abs_pos = idx + paths_start;
+                // Find the closing bracket
+                let bracket_start = abs_pos + "paths = ".len();
+                let bracket_content_start = bracket_start + 1; // skip '['
+                if let Some(bracket_end) = doc[bracket_content_start..].find(']') {
+                    let closing_bracket_pos = bracket_content_start + bracket_end;
+                    let existing = &doc[bracket_content_start..closing_bracket_pos].trim();
+                    let new_content = if existing.is_empty() {
+                        format!("\"{}\"", path_value)
+                    } else {
+                        format!("{}, \"{}\"", existing.trim_end_matches(','), path_value)
+                    };
+                    doc = format!(
+                        "{}{}]",
+                        &doc[..bracket_content_start],
+                        new_content
+                    );
+                }
+            }
         } else {
-            workspace_root.join(&self.project.path)
-        };
-        Some(path)
+            // No [projects] section exists — append it
+            doc = format!(
+                "{}\n[projects]\npaths = [\"{}\"]\n",
+                doc.trim_end(),
+                path_value
+            );
+        }
+
+        std::fs::write(&config_path, doc)
+    }
+
+    /// Unregister a project path from cc-workspace.toml (preserving comments).
+    pub fn unregister_project(
+        workspace_root: &Path,
+        project_dir: &Path,
+    ) -> Result<(), std::io::Error> {
+        let config_path = workspace_root.join("resource").join("cc-workspace.toml");
+        if !config_path.exists() {
+            return Ok(());
+        }
+
+        let path_value = project_dir.to_string_lossy();
+        let path_value = path_value.strip_prefix(r"\\?\").unwrap_or(&path_value);
+        let path_value = path_value.replace('\\', "/");
+
+        let content = std::fs::read_to_string(&config_path)?;
+        let mut config: WorkspaceConfig = toml::from_str(&content).unwrap_or_default();
+        config.projects.paths.retain(|p| {
+            let normalized = p.replace('\\', "/");
+            normalized != path_value
+        });
+
+        let new_content = toml::to_string_pretty(&config).map_err(|e| {
+            std::io::Error::new(std::io::ErrorKind::Other, e)
+        })?;
+        std::fs::write(&config_path, new_content)
     }
 
     /// Resolve only the claude_plugins directories from [local-claude-plugin].
@@ -332,8 +407,8 @@ projects = []
 [local]
 path = "~/.claude"
 
-["current project"]
-path = ""
+[projects]
+paths = []
 "#;
 
 #[cfg(test)]
@@ -442,6 +517,6 @@ claude_plugins = []
         assert!(config.local_claude_plugin.claude_plugins.is_empty());
         assert!(config.external.projects.is_empty());
         assert!(config.local.path.is_empty());
-        assert!(config.project.path.is_empty());
+        assert!(config.projects.paths.is_empty());
     }
 }

@@ -2,8 +2,8 @@ use crate::output;
 use anyhow::{bail, Result};
 use std::io::Write;
 
-pub fn run(project_dir: &std::path::Path, workspace_root: &std::path::Path) -> Result<()> {
-    match cc_core::init_project(project_dir, workspace_root) {
+pub fn run(project_dir: &std::path::Path, app_dir: &std::path::Path) -> Result<()> {
+    match cc_core::init_project(project_dir, app_dir) {
         Ok(cc_core::InitResult::Created { items }) => {
             output::print_success(&format!(
                 "Initialized .claude/ configuration in {}",
@@ -17,7 +17,7 @@ pub fn run(project_dir: &std::path::Path, workspace_root: &std::path::Path) -> R
             print_next_steps();
         }
         Ok(cc_core::InitResult::AlreadyExists { existing }) => {
-            handle_existing(project_dir, workspace_root, &existing)?;
+            handle_existing(project_dir, app_dir, &existing)?;
         }
         Err(e) => bail!("Init failed: {e}"),
     }
@@ -26,7 +26,7 @@ pub fn run(project_dir: &std::path::Path, workspace_root: &std::path::Path) -> R
 
 fn handle_existing(
     project_dir: &std::path::Path,
-    workspace_root: &std::path::Path,
+    app_dir: &std::path::Path,
     existing: &cc_core::ExistingClaudeDir,
 ) -> Result<()> {
     output::print_info(&format!(
@@ -64,7 +64,7 @@ fn handle_existing(
 
         match choice {
             "1" => {
-                match cc_core::reinit_project(project_dir, workspace_root) {
+                match cc_core::reinit_project(project_dir, app_dir) {
                     Ok(created) => {
                         output::print_success("Re-initialized .claude/ configuration");
                         if !created.is_empty() {
@@ -100,7 +100,7 @@ fn handle_existing(
                     }
                 }
 
-                match cc_core::force_init_project(project_dir, workspace_root) {
+                match cc_core::force_init_project(project_dir, app_dir) {
                     Ok(created) => {
                         output::print_success("Force-initialized fresh .claude/ configuration");
                         println!();

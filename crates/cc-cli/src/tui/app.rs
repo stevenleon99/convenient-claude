@@ -58,7 +58,7 @@ impl App {
     }
 
     /// Load resources for the current tab from the given project/workspace.
-    pub fn refresh(&mut self, project_dir: &std::path::Path, workspace_root: &std::path::Path) {
+    pub fn refresh(&mut self, project_dir: &std::path::Path, app_dir: &std::path::Path) {
         self.selected_indices.remove(&self.resource_type);
 
         if self.resource_type == ResourceType::Hook {
@@ -76,7 +76,7 @@ impl App {
         if self.resource_type == ResourceType::Plugin {
             self.resources = Vec::new();
             self.project_installed.clear();
-            self.load_plugins(workspace_root);
+            self.load_plugins(app_dir);
             self.table_state.select(Some(0));
             self.show_detail = false;
             self.snapshot = None;
@@ -88,9 +88,8 @@ impl App {
         // Scan project .claude/<type>/ to find what's physically installed
         self.project_installed = scan_project_resources(project_dir, self.resource_type);
 
-        let extern_libs = cc_core::list_extern_libs(project_dir);
         let mut entries =
-            cc_core::discover_resources(self.resource_type, workspace_root, &extern_libs);
+            cc_core::discover_resources(self.resource_type, project_dir, app_dir);
         cc_core::resolve_resources(&mut entries);
         self.resources = entries;
         self.table_state.select(Some(0));
@@ -128,8 +127,8 @@ impl App {
     }
 
     /// Load plugins from the claude_plugins directories in cc-workspace.toml.
-    fn load_plugins(&mut self, workspace_root: &std::path::Path) {
-        let Some(config) = cc_core::WorkspaceConfig::load(workspace_root) else {
+    fn load_plugins(&mut self, app_dir: &std::path::Path) {
+        let Some(config) = cc_core::WorkspaceConfig::load(app_dir) else {
             return;
         };
 
@@ -282,7 +281,7 @@ impl App {
     pub fn install_all_selected(
         &mut self,
         project_dir: &std::path::Path,
-        workspace_root: &std::path::Path,
+        app_dir: &std::path::Path,
     ) {
         let all_selections: Vec<(ResourceType, Vec<usize>)> = self
             .selected_indices
@@ -302,13 +301,12 @@ impl App {
         let mut errors = Vec::new();
 
         for (rt, indices) in &all_selections {
-            let extern_libs = cc_core::list_extern_libs(project_dir);
-            let mut entries = cc_core::discover_resources(*rt, workspace_root, &extern_libs);
+            let mut entries = cc_core::discover_resources(*rt, project_dir, app_dir);
             cc_core::resolve_resources(&mut entries);
 
             for idx in indices {
                 if let Some(entry) = entries.get(*idx) {
-                    match install_resource_to_project(entry, project_dir, workspace_root) {
+                    match install_resource_to_project(entry, project_dir, app_dir) {
                         Ok(_) => total_installed += 1,
                         Err(e) => {
                             total_skipped += 1;
@@ -336,7 +334,7 @@ impl App {
     pub fn install_selected(
         &mut self,
         project_dir: &std::path::Path,
-        workspace_root: &std::path::Path,
+        app_dir: &std::path::Path,
     ) {
         if self.resource_type == ResourceType::Hook {
             self.status_message = "Hooks cannot be installed via TUI".to_string();
@@ -359,7 +357,7 @@ impl App {
 
         for idx in &indices {
             if let Some(entry) = self.resources.get(*idx) {
-                match install_resource_to_project(entry, project_dir, workspace_root) {
+                match install_resource_to_project(entry, project_dir, app_dir) {
                     Ok(_dest) => {
                         installed += 1;
                         // Mark as active in our local state
@@ -428,9 +426,9 @@ impl App {
     pub fn confirm_and_install(
         &mut self,
         project_dir: &std::path::Path,
-        workspace_root: &std::path::Path,
+        app_dir: &std::path::Path,
     ) {
-        self.install_all_selected(project_dir, workspace_root);
+        self.install_all_selected(project_dir, app_dir);
         self.should_quit = true;
     }
 
@@ -455,7 +453,7 @@ impl App {
 fn install_resource_to_project(
     entry: &ResourceEntry,
     project_dir: &std::path::Path,
-    _workspace_root: &std::path::Path,
+    _app_dir: &std::path::Path,
 ) -> Result<(), String> {
     let resource_type = entry.resource_type;
     let target_dir = cc_core::paths::resource_dir(project_dir, resource_type);

@@ -4,27 +4,27 @@ use anyhow::Result;
 use cc_schema::ResourceType;
 use std::path::Path;
 
-pub fn run(target: &ListTarget, project_dir: &Path, workspace_root: &Path) -> Result<()> {
+pub fn run(target: &ListTarget, project_dir: &Path, app_dir: &Path) -> Result<()> {
     match target {
         ListTarget::Skills { filter, format } => {
-            list_resource(ResourceType::Skill, filter.as_deref(), format, project_dir, workspace_root)
+            list_resource(ResourceType::Skill, filter.as_deref(), format, project_dir, app_dir)
         }
         ListTarget::Commands { filter, format } => list_resource(
             ResourceType::Command,
             filter.as_deref(),
             format,
             project_dir,
-            workspace_root,
+            app_dir,
         ),
         ListTarget::Agents { filter, format } => {
-            list_resource(ResourceType::Agent, filter.as_deref(), format, project_dir, workspace_root)
+            list_resource(ResourceType::Agent, filter.as_deref(), format, project_dir, app_dir)
         }
         ListTarget::Hooks { format } => list_hooks(format, project_dir),
         ListTarget::Rules { filter, format } => {
-            list_resource(ResourceType::Rule, filter.as_deref(), format, project_dir, workspace_root)
+            list_resource(ResourceType::Rule, filter.as_deref(), format, project_dir, app_dir)
         }
-        ListTarget::Plugins { format } => list_plugins(format, project_dir, workspace_root),
-        ListTarget::All { format } => list_all(format, project_dir, workspace_root),
+        ListTarget::Plugins { format } => list_plugins(format, project_dir, app_dir),
+        ListTarget::All { format } => list_all(format, project_dir, app_dir),
     }
 }
 
@@ -33,10 +33,9 @@ fn list_resource(
     filter: Option<&str>,
     format: &OutputFormat,
     project_dir: &Path,
-    workspace_root: &Path,
+    app_dir: &Path,
 ) -> Result<()> {
-    let extern_libs = cc_core::list_extern_libs(project_dir);
-    let mut entries = cc_core::discover_resources(resource_type, workspace_root, &extern_libs);
+    let mut entries = cc_core::discover_resources(resource_type, project_dir, app_dir);
 
     // Apply filter
     if let Some(f) = filter {
@@ -90,7 +89,7 @@ fn list_hooks(format: &OutputFormat, project_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-fn list_all(format: &OutputFormat, project_dir: &Path, workspace_root: &Path) -> Result<()> {
+fn list_all(format: &OutputFormat, project_dir: &Path, app_dir: &Path) -> Result<()> {
     let fmt = match format {
         OutputFormat::Table => Format::Table,
         OutputFormat::Json => Format::Json,
@@ -101,8 +100,7 @@ fn list_all(format: &OutputFormat, project_dir: &Path, workspace_root: &Path) ->
         if *rt == ResourceType::Hook {
             continue;
         }
-        let extern_libs = cc_core::list_extern_libs(project_dir);
-        let mut entries = cc_core::discover_resources(*rt, workspace_root, &extern_libs);
+        let mut entries = cc_core::discover_resources(*rt, project_dir, app_dir);
         cc_core::resolve_resources(&mut entries);
         if !entries.is_empty() {
             println!("\n{}:", rt);
@@ -121,7 +119,7 @@ fn event_variant_name(event: &cc_schema::HookEvent) -> &'static str {
     }
 }
 
-fn list_plugins(format: &OutputFormat, project_dir: &Path, workspace_root: &Path) -> Result<()> {
+fn list_plugins(format: &OutputFormat, project_dir: &Path, app_dir: &Path) -> Result<()> {
     use cc_core::ResourceEntry;
 
     let mut plugins: Vec<(String, std::path::PathBuf, cc_schema::Origin, Option<String>, String)> = Vec::new();
@@ -138,8 +136,8 @@ fn list_plugins(format: &OutputFormat, project_dir: &Path, workspace_root: &Path
     scan_dirs.push((user_plugins, "local".to_string()));
 
     // 3. External registries from workspace config
-    if let Some(config) = cc_core::WorkspaceConfig::load(workspace_root) {
-        let registries = config.registries(workspace_root);
+    if let Some(config) = cc_core::WorkspaceConfig::load(app_dir) {
+        let registries = config.registries(app_dir);
         for registry in &registries {
             // Direct plugins/marketplaces folder
             let dir = registry.path.join("plugins").join("marketplaces");

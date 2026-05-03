@@ -3,7 +3,7 @@ use anyhow::Result;
 use owo_colors::OwoColorize;
 use std::path::Path;
 
-pub fn run(project_dir: &Path, _workspace_root: &Path) -> Result<()> {
+pub fn run(project_dir: &Path, _app_dir: &Path) -> Result<()> {
     println!("Checking Claude Code configuration...\n");
 
     let mut issues = 0u32;
