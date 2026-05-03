@@ -1,9 +1,7 @@
 use crate::error::CoreError;
 use crate::paths::claude_dir;
 use crate::workspace::WorkspaceConfig;
-use cc_schema::hook::{HookConfig, HookEntry, HookEvent, HookMatcher};
 use cc_schema::Settings;
-use std::collections::HashMap;
 use std::path::Path;
 
 /// Initialize a `.claude/` directory in the project and register it in cc-workspace.toml.
@@ -28,19 +26,12 @@ pub fn reinit_project(project_dir: &Path, app_dir: &Path) -> Result<Vec<String>,
     let claude = claude_dir(project_dir);
     let mut created = Vec::new();
 
-    // Ensure settings.json exists with default hooks
+    // Ensure settings.json exists with defaults
     let settings_path = claude.join("settings.json");
     if !settings_path.exists() {
         let settings = default_settings();
         cc_schema::io::write_json(&settings_path, &settings)?;
         created.push(".claude/settings.json".to_string());
-    } else if let Ok(mut settings) = cc_schema::io::read_json::<Settings>(&settings_path) {
-        // Add default hooks if missing from existing settings
-        if settings.hooks.is_none() {
-            settings.hooks = Some(default_hooks());
-            cc_schema::io::write_json(&settings_path, &settings)?;
-            created.push(".claude/settings.json (added default hooks)".to_string());
-        }
     }
 
     // Ensure resource directories exist
@@ -176,43 +167,10 @@ fn create_fresh(claude_dir: &Path) -> Result<Vec<String>, CoreError> {
     Ok(created)
 }
 
-/// Build settings with default hooks.
+/// Build default settings without hooks.
 fn default_settings() -> Settings {
     Settings {
         permissions: Default::default(),
-        hooks: Some(default_hooks()),
+        hooks: None,
     }
-}
-
-/// Build a default hook configuration.
-fn default_hooks() -> HookConfig {
-    let mut hooks = HashMap::new();
-
-    hooks.insert(
-        HookEvent::PreToolUse,
-        vec![HookMatcher {
-            matcher: Some("Bash".to_string()),
-            hooks: vec![HookEntry {
-                hook_type: "command".to_string(),
-                command: "cargo fmt --check".to_string(),
-            }],
-        }],
-    );
-
-    hooks.insert(
-        HookEvent::PostToolUse,
-        vec![],
-    );
-
-    hooks.insert(
-        HookEvent::Notification,
-        vec![],
-    );
-
-    hooks.insert(
-        HookEvent::Stop,
-        vec![],
-    );
-
-    HookConfig { hooks }
 }

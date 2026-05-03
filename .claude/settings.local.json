@@ -10,7 +10,8 @@
       "Bash(target/release/cc.exe --help)",
       "Bash(target/release/cc.exe session:*)",
       "Bash(./target/release/cc.exe list:*)",
-      "Bash(./target/release/cc.exe --help)"
+      "Bash(./target/release/cc.exe --help)",
+      "Bash(cargo check:*)"
     ]
   }
 }
